@@ -355,7 +355,7 @@ function openDb(dbPath, opts = {}) {
     return mapDocument(database.prepare('SELECT * FROM documents WHERE id = ?').get(documentId));
   }
 
-  function getTree(documentId) {
+  function getTree(documentId, { includeContent = true } = {}) {
     const document = mapDocument(
       database.prepare('SELECT * FROM documents WHERE id = ?').get(documentId)
     );
@@ -367,7 +367,12 @@ function openDb(dbPath, opts = {}) {
     const nodes = rows.map((row) => {
       const node = mapNode(row);
       if (node.type === 'content') {
-        node.content = mapContent(getContentRow(node.id)) || { html: '', css: '', js: '' };
+        const c = mapContent(getContentRow(node.id)) || { html: '', css: '', js: '' };
+        if (includeContent) {
+          node.content = c;
+        } else {
+          node.contentBytes = Buffer.byteLength((c.html || '') + (c.css || '') + (c.js || ''));
+        }
       }
       return node;
     });
@@ -509,6 +514,34 @@ function openDb(dbPath, opts = {}) {
     tx();
     emitChanged();
     return { ok: true };
+  }
+
+  function patchContent(id, { edits = [], append = {} } = {}) {
+    const row = getNodeRow(id);
+    if (!row) throw new Error(`Node ${id} not found`);
+    if (row.type !== 'content') throw new Error(`Node ${id} is not a content node`);
+    const existing = getContentRow(id) || { html: '', css: '', js: '' };
+    const next = { html: existing.html || '', css: existing.css || '', js: existing.js || '' };
+
+    for (const edit of edits) {
+      const field = edit.field;
+      if (!['html', 'css', 'js'].includes(field)) {
+        throw new Error(`patchContent: bad field "${field}"`);
+      }
+      const src = next[field];
+      const parts = src.split(edit.find);
+      const count = parts.length - 1;
+      if (count === 0) throw new Error(`patchContent: find not found in ${field}: ${JSON.stringify(edit.find)}`);
+      if (count > 1 && !edit.all) {
+        throw new Error(`patchContent: find matched ${count} times in ${field} (not unique); pass all:true to replace all`);
+      }
+      next[field] = edit.all ? parts.join(edit.replace) : src.replace(edit.find, edit.replace);
+    }
+    for (const field of ['html', 'css', 'js']) {
+      if (append[field] != null) next[field] = next[field] + append[field];
+    }
+    // reuse setContent's write path (handles updated_at + touchDocument + content upsert)
+    return setContent(id, next);
   }
 
   // -- grouping -------------------------------------------------------------
@@ -1085,6 +1118,10 @@ function openDb(dbPath, opts = {}) {
           const id = targetId(op);
           return setContent(id, { html: op.html, css: op.css, js: op.js });
         }
+        case 'patchContent': {
+          const id = targetId(op);
+          return patchContent(id, { edits: op.edits, append: op.append });
+        }
 
         // ---- structure / lifecycle ----
         case 'moveNode': {
@@ -1094,6 +1131,10 @@ function openDb(dbPath, opts = {}) {
           const patch = {};
           if (parentId !== undefined) patch.parentId = parentId;
           if (op.z != null) patch.z = op.z;
+          if (op.x != null) patch.x = op.x;
+          if (op.y != null) patch.y = op.y;
+          if (op.w != null) patch.w = op.w;
+          if (op.h != null) patch.h = op.h;
           if (Object.keys(patch).length) updateNode(id, patch);
           if (pageId !== undefined) setNodePage(id, pageId);
           return getNode(id);
@@ -1191,6 +1232,7 @@ function openDb(dbPath, opts = {}) {
     updateNode,
     deleteNode,
     setContent,
+    patchContent,
     groupNodes,
     ungroup,
     // notes

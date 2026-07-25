@@ -78,6 +78,9 @@ end your turn assuming the user will come back to chat — park on the app.
    node). In one `apply` batch: make the edits (`setContent`, `updateNode`, `createNode`,
    `deleteNode`, …), `resolveNote` each note you addressed
    (`{"op":"resolveNote","id":<noteId>}`), then `addVersion` and `requestReview` again.
+   Reposition a frame with `moveNode {id, x, y}`. Tweak content in place with
+   `patchContent {id, edits:[{field:'html', find, replace}]}` instead of resending the
+   whole node.
 
 4. **Back to step 2.** Repeat until `approved`.
 

@@ -9,7 +9,7 @@ Project  = { id, name, createdAt, updatedAt }              // listProjects adds 
 Document = { id, name, projectId|null, reviewState:'idle'|'awaiting'|'changes_requested'|'approved', createdAt, updatedAt }
 Node = { id, documentId, parentId|null, pageId|null, type:'frame'|'group'|'content',
          name, x, y, w, h, z, visible:boolean, locked:boolean,
-         createdAt, updatedAt, content?: { html, css, js } }   // content only on type==='content'
+         createdAt, updatedAt, content?: { html, css, js }, contentBytes?:number }   // content only on type==='content'; contentBytes present on lean get_tree instead of content
 Note = { id, documentId, nodeId|null, x, y, body, author:'user'|'ai',
          status:'open'|'resolved'|'wontfix', parentId|null, createdAt, resolvedAt|null }
 Version = { id, documentId, n, author:'ai'|'user', summary, createdAt }   // list omits snapshot; getVersion adds snapshot(JSON string)
@@ -77,8 +77,9 @@ updateDocument  { id|ref, patch:{name?, projectId?} }
 updatePage      { id|ref, patch:{name?, idx?} }
 updateNode      { id|ref, patch:{name?,x?,y?,w?,h?,z?,visible?,locked?,parentId?} }
 setContent      { id|ref, html?, css?, js? }
+patchContent    { id|ref, edits?:[{field:'html'|'css'|'js',find,replace,all?}], append?:{html?,css?,js?} }
 # structure / lifecycle
-moveNode        { id|ref, parentId?|parentRef?, pageId?|pageRef?, z? }
+moveNode        { id|ref, parentId?|parentRef?, pageId?|pageRef?, x?, y?, w?, h?, z? }
 groupNodes      { ref?, nodeIds:[id|ref], name? }
 ungroup         { groupId }
 deleteNode      { id|ref }

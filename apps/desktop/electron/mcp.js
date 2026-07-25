@@ -61,10 +61,16 @@ function createMcpServer(db) {
     'get_tree',
     {
       description:
-        'Get the flat node tree for a document. content nodes (components) include their html/css/js. Defaults to the first document.',
-      inputSchema: { documentId: z.number().int().optional() },
+        'Get the flat node tree for a document. content nodes carry a contentBytes hint; ' +
+        'pass includeContent:true to inline html/css/js (large). Fetch a single node\'s content with get_node. Defaults to the first document.',
+      inputSchema: {
+        documentId: z.number().int().optional(),
+        includeContent: z.boolean().optional(),
+      },
     },
-    textTool(async ({ documentId }) => db.getTree(documentId ?? firstDocumentId(db)))
+    textTool(async ({ documentId, includeContent }) =>
+      db.getTree(documentId ?? firstDocumentId(db), { includeContent: includeContent === true })
+    )
   );
 
   server.registerTool(
@@ -184,7 +190,8 @@ function registerApply(server, db) {
         '{"op":"createPage","ref":"pg","documentRef":"d","name":"Page 1"},' +
         '{"op":"createNode","ref":"frame","documentRef":"d","pageRef":"pg","type":"frame","name":"Screen","x":80,"y":80},' +
         '{"op":"createNode","documentRef":"d","parentRef":"frame","type":"content","name":"Card","content":{"html":"<div>hi</div>","css":".x{}","js":""}}]\n' +
-        'Op kinds: createProject, createDocument, createPage, createNode, updateProject, updateDocument, updatePage, updateNode, setContent, moveNode, groupNodes, ungroup, deleteNode, deletePage, deleteDocument, deleteProject, createNote, resolveNote, addVersion, restoreVersion, requestReview.\n' +
+        'Op kinds: createProject, createDocument, createPage, createNode, updateProject, updateDocument, updatePage, updateNode, setContent, patchContent, moveNode, groupNodes, ungroup, deleteNode, deletePage, deleteDocument, deleteProject, createNote, resolveNote, addVersion, restoreVersion, requestReview.\n' +
+        'moveNode also accepts x/y/w/h to reposition. patchContent {id|ref, edits:[{field,find,replace,all?}], append?} edits content in place.\n' +
         'requestReview {documentId?|documentRef?} parks the document for in-app user review — batch it after addVersion, then call the wait_for_review tool.',
       inputSchema: {
         ops: z.array(z.object({ op: z.string() }).passthrough()),
