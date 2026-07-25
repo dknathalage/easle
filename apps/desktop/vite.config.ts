@@ -6,5 +6,14 @@ export default defineConfig({
   base: './',
   plugins: [react()],
   server: { port: 5273, strictPort: true },
-  build: { outDir: 'dist', emptyOutDir: true },
+  build: {
+    outDir: 'dist',
+    emptyOutDir: true,
+    rollupOptions: {
+      input: {
+        main: 'index.html',
+        contentRenderer: 'content-renderer.html',
+      },
+    },
+  },
 });
