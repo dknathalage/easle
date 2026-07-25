@@ -32,11 +32,40 @@ aggressively: build a whole tree in a single call.
 `Project → Document → Page → nodes`. Node `type` is:
 - **`frame`** — a screen/container (e.g. a 393×852 phone frame).
 - **`group`** — organizational grouping.
-- **`content`** — a leaf design, authored as self-contained **HTML/CSS/JS**. This is
-  where the actual UI lives. Pass `content:{html,css,js}` right in the `createNode` op.
+- **`content`** — a leaf design. This is where the actual UI lives. Author it either as
+  self-contained **HTML/CSS/JS** (`content:{html,css,js}`) **or** as a **React component**
+  (`content:{source}` — JSX). This is where the actual UI lives.
 
 Author content as complete, live HTML/CSS/JS (CSS scoped within the node; JS optional
 for interactivity). Frames hold content; don't put raw HTML on a frame.
+
+### Authoring with React (components + shared styles)
+
+Content nodes can be React instead of raw HTML. Set a node's `source` to JSX exporting a
+default component — it's compiled once at write time (a compile error rolls back the
+whole `apply` batch). This is a **blank slate**: React only, no UI library, no Tailwind,
+no theme, no CSS reset. You bring your own styles.
+
+- **Reusable components** — author shared components once with `createComponent
+  {documentRef, name, source}` (name is unique per document). Reference them from a node's
+  (or another component's) `source` by name: `import Button from './Button'`. Prefer
+  editing in place with `patchComponent {id, edits:[{field:'source', find, replace}]}`.
+- **Shared styles, once** — set document-wide CSS/JS with `setDocumentAssets
+  {documentRef, css, js}` instead of repeating styles per node. Use CSS variables
+  (e.g. `:root{--brand:#333}`) so every node shares one palette/typography.
+- **Icons** — there is no bundled icon library. Define icons as a shared component (inline
+  SVG JSX) or as shared JS, and reuse it across nodes.
+
+```json
+apply({ "ops": [
+  {"op":"setDocumentAssets","documentRef":"d","css":":root{--brand:#333}"},
+  {"op":"createComponent","documentRef":"d","name":"Button","source":"export default ({label}) => <button style={{color:'var(--brand)'}}>{label}</button>"},
+  {"op":"createNode","documentRef":"d","parentRef":"screen","type":"content","name":"CTA","x":24,"y":120,"w":345,"h":80,
+   "content":{"source":"import Button from './Button'; export default () => <Button label=\"Go\" />"}}
+]})
+```
+
+Legacy HTML/CSS/JS nodes keep working unchanged; mix both styles freely.
 
 ### Example — author a screen in one call
 
@@ -101,6 +130,8 @@ say so in your version summary.
 - `list_projects` / `get_project {id}` — inventory.
 - `get_tree {documentId?}` — the flat node tree with content; defaults to first document.
 - `get_node {id}` — one node.
+- `list_components {documentId?}` — reusable React components for the document.
+- `get_document_assets {documentId?}` — the document's shared `{css, js}`.
 - `list_notes {documentId?, status?}` — feedback (default open); `wait_for_review` already
   returns the open user notes, so you rarely need this mid-loop.
 - `list_versions {documentId?}` / `get_version {id}` — history + snapshots.
