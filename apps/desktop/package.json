@@ -1,6 +1,6 @@
 {
   "name": "@easle/desktop",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "description": "Easle desktop app — local AI-authored / human-reviewed design-iteration tool",
   "author": "dknathalage <dknathalage@gmail.com>",
