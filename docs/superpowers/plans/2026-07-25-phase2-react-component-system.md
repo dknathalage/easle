@@ -54,7 +54,7 @@ After **Task 1 (schema)** lands, three tracks run in parallel in separate worktr
 
 Create `apps/desktop/electron/__tests__/schema.test.js`:
 ```js
-const { test, expect } = require('vitest');
+// test/expect are globals (vitest globals:true); do NOT require('vitest') — it is ESM-only.
 const { makeDb } = require('./helpers');
 
 test('new columns and tables exist', () => {
@@ -131,7 +131,7 @@ In `apps/desktop/package.json` devDependencies add `"esbuild": "^0.21.5"`. Run `
 
 Create `apps/desktop/electron/__tests__/compile.test.js`:
 ```js
-const { test, expect } = require('vitest');
+// test/expect are globals (vitest globals:true); do NOT require('vitest') — it is ESM-only.
 const { compileJsx } = require('../compile.js');
 
 test('compiles JSX to JS referencing global React', () => {
@@ -193,7 +193,7 @@ git commit -m "feat(compile): esbuild JSX->CJS compile module"
 
 Create `apps/desktop/electron/__tests__/reactContent.test.js`:
 ```js
-const { test, expect } = require('vitest');
+// test/expect are globals (vitest globals:true); do NOT require('vitest') — it is ESM-only.
 const { makeDb } = require('./helpers');
 
 function seedContent(db) {
@@ -296,7 +296,7 @@ git commit -m "feat(mcp): setContent accepts React source (compile-on-write)"
 
 Create `apps/desktop/electron/__tests__/components.test.js`:
 ```js
-const { test, expect } = require('vitest');
+// test/expect are globals (vitest globals:true); do NOT require('vitest') — it is ESM-only.
 const { makeDb } = require('./helpers');
 
 function doc(db) {
@@ -450,7 +450,7 @@ git commit -m "feat(mcp): reusable React components CRUD"
 
 Create `apps/desktop/electron/__tests__/documentAssets.test.js`:
 ```js
-const { test, expect } = require('vitest');
+// test/expect are globals (vitest globals:true); do NOT require('vitest') — it is ESM-only.
 const { makeDb } = require('./helpers');
 
 function doc(db) {

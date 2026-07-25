@@ -70,7 +70,7 @@ module.exports = { makeDb };
 
 Create `apps/desktop/electron/__tests__/smoke.test.js`:
 ```js
-const { test, expect } = require('vitest');
+// test/expect are globals (vitest globals:true); do NOT require('vitest') — it is ESM-only.
 const { makeDb } = require('./helpers');
 
 test('empty db has no documents', () => {
@@ -107,7 +107,7 @@ git commit -m "test: add vitest harness with in-memory db helper"
 
 Create `apps/desktop/electron/__tests__/moveNode.test.js`:
 ```js
-const { test, expect } = require('vitest');
+// test/expect are globals (vitest globals:true); do NOT require('vitest') — it is ESM-only.
 const { makeDb } = require('./helpers');
 
 test('moveNode repositions x/y/w/h', () => {
@@ -180,7 +180,7 @@ git commit -m "feat(mcp): moveNode repositions x/y/w/h"
 
 Create `apps/desktop/electron/__tests__/getTree.test.js`:
 ```js
-const { test, expect } = require('vitest');
+// test/expect are globals (vitest globals:true); do NOT require('vitest') — it is ESM-only.
 const { makeDb } = require('./helpers');
 
 function seedDoc(db) {
@@ -296,7 +296,7 @@ git commit -m "feat(mcp): lean get_tree — omit content by default, add content
 
 Create `apps/desktop/electron/__tests__/patchContent.test.js`:
 ```js
-const { test, expect } = require('vitest');
+// test/expect are globals (vitest globals:true); do NOT require('vitest') — it is ESM-only.
 const { makeDb } = require('./helpers');
 
 function seed(db, html) {
