@@ -13,7 +13,8 @@
     "start": "electron .",
     "rebuild": "electron-rebuild -f -w better-sqlite3",
     "dist": "vite build && electron-builder",
-    "dist:dir": "vite build && electron-builder --dir"
+    "dist:dir": "vite build && electron-builder --dir",
+    "release": "vite build && electron-builder --publish always"
   },
   "build": {
     "appId": "com.dknathalage.easle",
@@ -32,13 +33,31 @@
       "**/node_modules/better-sqlite3/**/*"
     ],
     "npmRebuild": true,
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "dknathalage",
+        "repo": "easle"
+      }
+    ],
     "mac": {
       "category": "public.app-category.developer-tools",
       "target": [
-        "dmg",
-        "dir"
+        "dmg"
       ],
       "identity": null
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "linux": {
+      "category": "Development",
+      "target": [
+        "AppImage",
+        "deb"
+      ]
     }
   },
   "dependencies": {

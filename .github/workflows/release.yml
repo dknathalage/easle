@@ -1,0 +1,77 @@
+name: release
+
+# Build Easle installers for macOS (arm64 + Intel), Windows, and Linux, then
+# attach them to a GitHub Release. Triggered by pushing a version tag:
+#
+#   npm version patch --workspace apps/desktop   # or bump manually
+#   git tag v0.1.1 && git push origin v0.1.1
+#
+# Each matrix runner builds installers for its OWN OS/arch (no cross-compiling
+# the native better-sqlite3 module), so users download a prebuilt app instead of
+# building from source.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14      # Apple Silicon (arm64)
+          - os: macos-13      # Intel (x64)
+          - os: windows-latest
+          - os: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build installers
+        run: npm run dist --workspace apps/desktop -- --publish never
+        env:
+          # Unsigned builds: don't let electron-builder try to sign on macOS CI.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: easle-${{ matrix.os }}
+          path: |
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.AppImage
+            apps/desktop/release/*.deb
+          if-no-files-found: warn
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    # Only cut a Release for tag pushes (manual runs just produce artifacts above).
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+    steps:
+      - name: Download all installers
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          fail_on_unmatched_files: false

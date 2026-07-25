@@ -13,36 +13,48 @@ easle/
   data/             runtime SQLite db (gitignored)
 ```
 
-## Run
+Easle is two things you install once: the **desktop app** (which hosts the canvas *and*
+the MCP server on `127.0.0.1:47600`) and the **Claude Code plugin** (which wires that
+server into Claude and teaches the review loop). You don't build anything.
+
+## 1. Install the app
+
+Download a prebuilt installer for your OS from the
+[**Releases**](https://github.com/dknathalage/easle/releases/latest) page
+(`.dmg` for macOS, `.exe` for Windows, `.AppImage`/`.deb` for Linux).
+
+On macOS/Linux you can do it in one line:
 
 ```bash
-npm install
-# better-sqlite3 must match Electron's ABI:
-npm run rebuild --workspace apps/desktop     # runs @electron/rebuild for better-sqlite3
-npm run dev                                   # launches Vite + Electron
+curl -fsSL https://raw.githubusercontent.com/dknathalage/easle/main/scripts/install.sh | sh
 ```
 
-The app owns the database and serves a loopback JSON API on `127.0.0.1:47600`. The MCP server is **embedded in the app** and exposed over HTTP on that same address at `/mcp`, so **starting the app is all you need** — there is no separate MCP process. If the app is down, Claude Code simply can't reach the URL.
+> The current builds are **unsigned**. On macOS, right-click the app → **Open** the first
+> time (or the installer script clears the quarantine flag for you). On Windows, click
+> **More info → Run anyway** on the SmartScreen prompt.
 
-## Use it with Claude Code
+Then launch Easle. The app serves a loopback JSON API on `127.0.0.1:47600` with the MCP
+server embedded at `/mcp` — **starting the app is all you need**, there's no separate MCP
+process. If the app is down, Claude Code simply can't reach the URL.
 
-### Option A — install the plugin (recommended)
+## 2. Install the Claude Code plugin
 
-This repo ships a Claude Code plugin that wires up the MCP server **and** teaches Claude
-the review loop in one step:
+This repo doubles as a plugin marketplace that wires up the MCP server **and** teaches
+Claude the review loop in one step:
 
 ```
 /plugin marketplace add dknathalage/easle
 /plugin install easle@easle
 ```
 
-Then restart Claude Code and **start the Easle app**. That's it — the `easle` MCP server
-is configured and the `design-review-loop` skill activates when you ask Claude to design
-or iterate on a UI.
+Restart Claude Code. The `easle` MCP server is configured and the `design-review-loop`
+skill activates when you ask Claude to design or iterate on a UI. Run `/easle:status`
+anytime to check the app is running (and get launch/install steps if not).
 
-### Option B — wire the MCP server manually
+<details>
+<summary>Alternative — wire the MCP server manually (no plugin)</summary>
 
-Add to your project's `.mcp.json` (a config-trust decision, so you add it):
+Add to your project's `.mcp.json`:
 
 ```json
 {
@@ -54,6 +66,7 @@ Add to your project's `.mcp.json` (a config-trust decision, so you add it):
   }
 }
 ```
+</details>
 
 ## The review loop
 
@@ -68,3 +81,17 @@ parks in the app and waits for your verdict instead of ending its turn:
 3. The AI is parked on `wait_for_review`; on submit it reads your open notes, revises via
    `apply`, resolves the notes, adds a version, and requests review again.
 4. Repeat until you **Approve & continue**, at which point the AI resumes its broader task.
+
+## Develop from source
+
+Building the app yourself (contributors only — users should download a release):
+
+```bash
+npm install
+npm run rebuild --workspace apps/desktop   # match better-sqlite3 to Electron's ABI
+npm run dev                                 # Vite + Electron with hot reload
+```
+
+Package installers locally with `npm run dist --workspace apps/desktop` (or `task dist`).
+Pushing a `v*` tag runs `.github/workflows/release.yml`, which builds macOS/Windows/Linux
+installers and attaches them to a GitHub Release.

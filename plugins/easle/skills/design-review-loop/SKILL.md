@@ -14,7 +14,8 @@ server**. This skill is the loop.
 
 The Easle app must be **running** (it hosts the MCP server on `127.0.0.1:47600`). If
 any `easle` tool errors with a connection/"start the Easle app" message, tell the user
-to launch Easle, then continue. Don't try to start it yourself.
+to launch Easle (or run `/easle:status` for launch/install steps), then continue. Don't
+try to start it yourself.
 
 ## The one write path: `apply(ops)`
 
