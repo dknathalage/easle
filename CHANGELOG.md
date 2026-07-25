@@ -2,6 +2,8 @@
 
 All notable changes to Easle are documented here. This file is generated from [Conventional Commits](https://www.conventionalcommits.org/) by `task release`.
 
+## [0.1.3](https://github.com/dknathalage/easle/compare/v0.1.2...v0.1.3) (2026-07-25)
+
 ## [0.1.2](https://github.com/dknathalage/easle/compare/v0.1.1...v0.1.2) (2026-07-25)
 
 
