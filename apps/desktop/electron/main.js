@@ -46,8 +46,15 @@ let apiServer = null;
 let mainWindow = null;
 
 function resolveDbPath() {
-  if (process.env.CANVAS_DB_PATH) return process.env.CANVAS_DB_PATH;
-  // default: <repo>/data/canvas.db — electron/ is apps/desktop/electron
+  if (process.env.EASLE_DB_PATH) return process.env.EASLE_DB_PATH;
+  if (process.env.CANVAS_DB_PATH) return process.env.CANVAS_DB_PATH; // legacy override
+  // Packaged app: store under the OS user-data dir (writable; survives upgrades).
+  // __dirname would live inside the read-only app.asar, so the repo-relative
+  // path below is dev-only.
+  if (app.isPackaged) {
+    return path.join(app.getPath('userData'), 'data', 'canvas.db');
+  }
+  // Dev: <repo>/data/canvas.db — electron/ is apps/desktop/electron
   const dataDir = path.resolve(__dirname, '..', '..', '..', 'data');
   return path.join(dataDir, 'canvas.db');
 }

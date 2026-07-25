@@ -3,7 +3,7 @@
 
 const http = require('http');
 const { URL } = require('url');
-const { API_HOST, API_PORT } = require('@easle/shared');
+const { API_HOST, API_PORT } = require('./shared');
 const { StreamableHTTPServerTransport } = require('@modelcontextprotocol/sdk/server/streamableHttp.js');
 const { createMcpServer } = require('./mcp');
 

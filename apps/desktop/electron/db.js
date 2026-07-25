@@ -3,7 +3,12 @@
 // Every mutating method calls emitChanged() after committing.
 
 const fs = require('fs');
+const path = require('path');
 const Database = require('better-sqlite3');
+
+// Schema lives beside this file (vendored — no external workspace package, so
+// electron-builder can package the app). fs reads this correctly inside app.asar.
+const SCHEMA_PATH = path.join(__dirname, 'schema.sql');
 
 const now = () => new Date().toISOString();
 
@@ -91,8 +96,7 @@ function runSchemaAndSeed(db) {
   // Accept either the raw better-sqlite3 handle or the openDb() wrapper (which
   // exposes the handle as `_raw`). main.js passes the wrapper.
   const raw = db && typeof db.exec === 'function' ? db : db._raw;
-  const schemaPath = require.resolve('@easle/shared/schema.sql');
-  const schema = fs.readFileSync(schemaPath, 'utf8');
+  const schema = fs.readFileSync(SCHEMA_PATH, 'utf8');
   raw.exec(schema);
 
   const count = raw.prepare('SELECT COUNT(*) AS c FROM documents').get().c;
@@ -159,8 +163,7 @@ function openDb(dbPath, opts = {}) {
   // runSchemaAndSeed re-running it is a no-op). Without this, the migrations
   // below (ALTER TABLE nodes/documents) would throw on a brand-new db.
   {
-    const schemaPath = require.resolve('@easle/shared/schema.sql');
-    database.exec(fs.readFileSync(schemaPath, 'utf8'));
+    database.exec(fs.readFileSync(SCHEMA_PATH, 'utf8'));
   }
 
   // -- migration: projects (top-level grouping above documents) ---------------

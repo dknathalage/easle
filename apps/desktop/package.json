@@ -2,6 +2,8 @@
   "name": "@easle/desktop",
   "version": "0.1.0",
   "private": true,
+  "description": "Easle desktop app — local AI-authored / human-reviewed design-iteration tool",
+  "author": "dknathalage <dknathalage@gmail.com>",
   "main": "electron/main.js",
   "scripts": {
     "dev:vite": "vite",
@@ -9,10 +11,37 @@
     "dev": "concurrently -k -n vite,electron \"npm:dev:vite\" \"npm:dev:electron\"",
     "build": "vite build",
     "start": "electron .",
-    "rebuild": "electron-rebuild -f -w better-sqlite3"
+    "rebuild": "electron-rebuild -f -w better-sqlite3",
+    "dist": "vite build && electron-builder",
+    "dist:dir": "vite build && electron-builder --dir"
+  },
+  "build": {
+    "appId": "com.dknathalage.easle",
+    "productName": "Easle",
+    "electronVersion": "32.3.3",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**/*",
+      "dist/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "**/node_modules/better-sqlite3/**/*"
+    ],
+    "npmRebuild": true,
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dmg",
+        "dir"
+      ],
+      "identity": null
+    }
   },
   "dependencies": {
-    "@easle/shared": "*",
     "@fontsource/ibm-plex-mono": "^5.3.0",
     "@fontsource/ibm-plex-sans": "^5.3.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
@@ -26,6 +55,7 @@
     "@vitejs/plugin-react": "^4.3.0",
     "concurrently": "^9.0.0",
     "electron": "^32.0.0",
+    "electron-builder": "^25.1.8",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "typescript": "^5.5.0",

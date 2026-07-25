@@ -1,0 +1,95 @@
+version: '3'
+
+# Easle dev + packaging tasks. Requires go-task (https://taskfile.dev).
+#
+#   task install        # install workspace deps
+#   task rebuild        # rebuild better-sqlite3 for Electron's ABI (dev, first run)
+#   task dev            # run Vite + Electron with HMR
+#   task dist           # build a production Easle.app + .dmg (release/)
+#   task install-local  # build + copy Easle.app into /Applications (prod install)
+#   task open           # launch the installed app
+#   task mcp:check      # curl the embedded MCP server (app must be running)
+
+vars:
+  DESKTOP: apps/desktop
+  RELEASE: apps/desktop/release
+  APP_NAME: Easle.app
+  INSTALL_DIR: /Applications
+  MCP_URL: http://127.0.0.1:47600/mcp
+
+tasks:
+  default:
+    cmds:
+      - task --list
+    silent: true
+
+  install:
+    desc: Install workspace dependencies
+    cmds:
+      - npm install
+
+  rebuild:
+    desc: Rebuild native modules (better-sqlite3) for Electron's ABI — dev only
+    cmds:
+      - npm run rebuild --workspace {{.DESKTOP}}
+
+  dev:
+    desc: Run Vite + Electron with hot reload
+    cmds:
+      - npm run dev --workspace {{.DESKTOP}}
+
+  build:
+    desc: Build the renderer only (Vite → apps/desktop/dist)
+    cmds:
+      - npm run build --workspace {{.DESKTOP}}
+
+  dist:
+    desc: Build a production Easle.app + .dmg into apps/desktop/release/
+    cmds:
+      - npm run dist --workspace {{.DESKTOP}}
+      - 'echo "Artifacts:" && find {{.RELEASE}} -maxdepth 2 -name "*.dmg" -o -maxdepth 2 -name "{{.APP_NAME}}"'
+
+  dist:dir:
+    desc: Build the unpacked production .app only (no .dmg — faster)
+    cmds:
+      - npm run dist:dir --workspace {{.DESKTOP}}
+
+  install-local:
+    desc: Build the prod app and install it into /Applications
+    deps: [dist:dir]
+    cmds:
+      - |
+        APP="$(find {{.RELEASE}} -maxdepth 2 -name '{{.APP_NAME}}' -type d | head -1)"
+        if [ -z "$APP" ]; then echo "Build produced no {{.APP_NAME}} — check the dist output"; exit 1; fi
+        echo "Installing $APP → {{.INSTALL_DIR}}/{{.APP_NAME}}"
+        rm -rf "{{.INSTALL_DIR}}/{{.APP_NAME}}"
+        cp -R "$APP" "{{.INSTALL_DIR}}/{{.APP_NAME}}"
+        # unsigned local build: clear the quarantine bit so Gatekeeper lets it open
+        xattr -dr com.apple.quarantine "{{.INSTALL_DIR}}/{{.APP_NAME}}" 2>/dev/null || true
+        echo "Installed. Launch with:  task open   (or open -a Easle)"
+
+  open:
+    desc: Launch the installed Easle app
+    cmds:
+      - open -a Easle
+
+  uninstall:
+    desc: Remove Easle from /Applications
+    cmds:
+      - rm -rf "{{.INSTALL_DIR}}/{{.APP_NAME}}"
+      - echo "Removed {{.INSTALL_DIR}}/{{.APP_NAME}}"
+
+  mcp:check:
+    desc: List the embedded MCP tools (the app must be running)
+    cmds:
+      - |
+        curl -sS -X POST {{.MCP_URL}} \
+          -H 'content-type: application/json' \
+          -H 'accept: application/json, text/event-stream' \
+          -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+
+  clean:
+    desc: Remove build output (release/ and dist/)
+    cmds:
+      - rm -rf {{.RELEASE}} {{.DESKTOP}}/dist
+      - echo "Cleaned build output (kept node_modules and data/)."
