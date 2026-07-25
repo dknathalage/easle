@@ -9,7 +9,8 @@ version: '3'
 #   task install-local  # build + copy Easle.app into /Applications (prod install)
 #   task open           # launch the installed app
 #   task mcp:check      # curl the embedded MCP server (app must be running)
-#   task release TAG=v0.1.1   # cut/append a GitHub Release from a clean main (host OS)
+#   task release        # bump semver (patch), build all platforms, publish a GitHub Release
+#   task release BUMP=minor   # ...or minor/major. Builds mac+win+linux locally (needs Wine + Docker).
 
 vars:
   DESKTOP: apps/desktop
@@ -90,12 +91,12 @@ tasks:
           -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 
   release:preflight:
-    desc: "Verify a clean working tree identical to origin/main, and TAG == package version"
+    desc: "Verify a clean working tree on main, identical to origin/main, and gh is authed"
     cmds:
       - |
         set -e
         command -v gh >/dev/null 2>&1 || { echo "gh (GitHub CLI) is required and must be authed."; exit 1; }
-        test -n "{{.TAG}}" || { echo "Set TAG, e.g.  task release TAG=v0.1.1"; exit 1; }
+        gh auth status >/dev/null 2>&1 || { echo "gh is not authenticated — run 'gh auth login'."; exit 1; }
         BR="$(git rev-parse --abbrev-ref HEAD)"
         [ "$BR" = "main" ] || { echo "On '$BR', not main — releases are cut from main."; exit 1; }
         if [ -n "$(git status --porcelain)" ]; then
@@ -104,29 +105,45 @@ tasks:
         git fetch --quiet origin main
         LOCAL="$(git rev-parse HEAD)"; REMOTE="$(git rev-parse origin/main)"
         [ "$LOCAL" = "$REMOTE" ] || { echo "Local main ($LOCAL) != origin/main ($REMOTE). Push/pull so they match."; exit 1; }
-        VER="v$(node -p "require('./{{.DESKTOP}}/package.json').version")"
-        [ "{{.TAG}}" = "$VER" ] || { echo "TAG {{.TAG}} != package.json version $VER — bump the version or fix TAG."; exit 1; }
-        echo "Preflight OK: clean main @ $(git rev-parse --short HEAD) == origin/main, version $VER"
+        echo "Preflight OK: clean main @ $(git rev-parse --short HEAD) == origin/main"
 
   release:
-    desc: "Build host-OS installers from a clean main and publish to a GitHub Release: task release TAG=v0.1.1"
+    desc: "Bump semver, build ALL platforms locally, and publish a GitHub Release: task release [BUMP=patch|minor|major]"
     deps: [release:preflight]
+    vars:
+      BUMP: '{{.BUMP | default "patch"}}'
     cmds:
-      - task: dist
       - |
         set -e
-        cd {{.RELEASE}}
-        FILES="$(ls *.dmg *.exe *.AppImage *.deb 2>/dev/null || true)"
-        [ -n "$FILES" ] || { echo "No installers found in {{.RELEASE}} — did the build succeed?"; exit 1; }
-        echo "Installers: $FILES"
-        if gh release view "{{.TAG}}" >/dev/null 2>&1; then
-          echo "Release {{.TAG}} exists — uploading this OS's installers"
-          gh release upload "{{.TAG}}" $FILES --clobber
-        else
-          echo "Creating release {{.TAG}} (tag at current main)"
-          gh release create "{{.TAG}}" $FILES --title "{{.TAG}}" --generate-notes --target "$(git rev-parse HEAD)"
+        # 1) Bump the app version (no git tag/commit yet) and derive the tag.
+        npm version {{.BUMP}} --no-git-tag-version --workspace {{.DESKTOP}} >/dev/null
+        NEWVER="$(node -p "require('./{{.DESKTOP}}/package.json').version")"
+        TAG="v${NEWVER}"
+        # Revert the version bump if anything below fails, so a failed run is a no-op.
+        trap 'echo "Release failed — reverting version bump."; git checkout -- {{.DESKTOP}}/package.json 2>/dev/null || true' ERR
+        if git rev-parse "$TAG" >/dev/null 2>&1 || gh release view "$TAG" >/dev/null 2>&1; then
+          echo "Release $TAG already exists — bump a different level."; exit 1
         fi
-      - echo "Published. Run 'task release TAG={{.TAG}}' on macOS/Windows/Linux to add each OS's installer."
+        echo "==> Releasing $TAG (bump {{.BUMP}})"
+
+        # 2) Build installers for macOS + Windows + Linux locally.
+        #    Requires the cross-build toolchain: Wine (Windows) and Docker or a
+        #    Linux host (Linux). electron-builder errors here if they're missing.
+        npm run dist --workspace {{.DESKTOP}} -- --mac --win --linux --publish never
+
+        # 3) Collect whatever installers were produced.
+        FILES="$(ls {{.RELEASE}}/*.dmg {{.RELEASE}}/*.exe {{.RELEASE}}/*.AppImage {{.RELEASE}}/*.deb 2>/dev/null || true)"
+        [ -n "$FILES" ] || { echo "No installers were produced in {{.RELEASE}}."; exit 1; }
+        echo "==> Built:"; echo "$FILES" | sed 's/^/    /'
+
+        # 4) Commit the bump, tag, push, and publish the release with the artifacts.
+        git add {{.DESKTOP}}/package.json
+        git commit -m "release $TAG"
+        git tag "$TAG"
+        git push origin main "$TAG"
+        gh release create "$TAG" $FILES --title "$TAG" --generate-notes
+        trap - ERR
+        echo "==> Published $TAG: $(gh release view "$TAG" --json url -q .url)"
 
   clean:
     desc: Remove build output (release/ and dist/)

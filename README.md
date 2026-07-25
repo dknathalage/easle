@@ -93,5 +93,17 @@ npm run dev                                 # Vite + Electron with hot reload
 ```
 
 Package installers locally with `npm run dist --workspace apps/desktop` (or `task dist`).
-Pushing a `v*` tag runs `.github/workflows/release.yml`, which builds macOS/Windows/Linux
-installers and attaches them to a GitHub Release.
+
+Releases are cut **locally** (no CI). From a clean `main`:
+
+```bash
+task release              # bump patch, build mac+win+linux, publish a GitHub Release
+task release BUMP=minor   # or minor / major
+```
+
+`task release` preflights (on `main`, clean tree, `main == origin/main`, `gh` authed),
+bumps the app's semver version, builds installers for **all three platforms**, commits +
+tags + pushes, then creates the GitHub Release with the artifacts. Building Windows from
+another OS needs **Wine**, and Linux needs **Docker** (or a Linux host); electron-builder
+errors if the toolchain is missing, and the task reverts the version bump so a failed run
+is a no-op.
