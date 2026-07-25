@@ -51,6 +51,27 @@ CREATE TABLE IF NOT EXISTS contents (
   updated_at TEXT NOT NULL
 );
 
+-- reusable React components, scoped to a document (author once, use by name)
+CREATE TABLE IF NOT EXISTS components (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  document_id INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  source TEXT NOT NULL,
+  compiled TEXT NOT NULL,
+  css TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(document_id, name)
+);
+
+-- document-level shared css/js (blank slate by default)
+CREATE TABLE IF NOT EXISTS document_assets (
+  document_id INTEGER PRIMARY KEY REFERENCES documents(id) ON DELETE CASCADE,
+  css TEXT NOT NULL DEFAULT '',
+  js  TEXT NOT NULL DEFAULT '',
+  updated_at TEXT NOT NULL
+);
+
 -- pinned feedback. node_id null => pinned to canvas; else x/y are relative to the node
 CREATE TABLE IF NOT EXISTS notes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

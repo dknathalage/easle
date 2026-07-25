@@ -83,6 +83,24 @@ function createMcpServer(db) {
   );
 
   server.registerTool(
+    'list_components',
+    {
+      description: 'List reusable React components for a document. Defaults to the first document.',
+      inputSchema: { documentId: z.number().int().optional() },
+    },
+    textTool(async ({ documentId }) => db.listComponents(documentId ?? firstDocumentId(db)))
+  );
+
+  server.registerTool(
+    'get_document_assets',
+    {
+      description: 'Get the document-level shared css/js ({css,js}, empty by default). Defaults to the first document.',
+      inputSchema: { documentId: z.number().int().optional() },
+    },
+    textTool(async ({ documentId }) => db.getDocumentAssets(documentId ?? firstDocumentId(db)))
+  );
+
+  server.registerTool(
     'list_notes',
     {
       description: 'List notes for a document, filtered by status (default "open"). Defaults to the first document.',
@@ -190,7 +208,8 @@ function registerApply(server, db) {
         '{"op":"createPage","ref":"pg","documentRef":"d","name":"Page 1"},' +
         '{"op":"createNode","ref":"frame","documentRef":"d","pageRef":"pg","type":"frame","name":"Screen","x":80,"y":80},' +
         '{"op":"createNode","documentRef":"d","parentRef":"frame","type":"content","name":"Card","content":{"html":"<div>hi</div>","css":".x{}","js":""}}]\n' +
-        'Op kinds: createProject, createDocument, createPage, createNode, updateProject, updateDocument, updatePage, updateNode, setContent, patchContent, moveNode, groupNodes, ungroup, deleteNode, deletePage, deleteDocument, deleteProject, createNote, resolveNote, addVersion, restoreVersion, requestReview.\n' +
+        'Op kinds: createProject, createDocument, createPage, createNode, updateProject, updateDocument, updatePage, updateNode, setContent, patchContent, createComponent, updateComponent, patchComponent, deleteComponent, setDocumentAssets, moveNode, groupNodes, ungroup, deleteNode, deletePage, deleteDocument, deleteProject, createNote, resolveNote, addVersion, restoreVersion, requestReview.\n' +
+        'setContent {id|ref, source} authors a React (JSX) content node (compiled on write); legacy {html,css,js} still works. createComponent {documentId?|documentRef?, name, source, css?} / updateComponent {id|ref, patch:{name?,source?,css?}} / patchComponent {id|ref, edits:[{field:"source"|"css",find,replace,all?}], append?} manage reusable components (recompiled on source change). setDocumentAssets {documentId?|documentRef?, css?, js?} sets the document-level shared css/js (blank by default).\n' +
         'moveNode also accepts x/y/w/h to reposition. patchContent {id|ref, edits:[{field,find,replace,all?}], append?} edits content in place.\n' +
         'requestReview {documentId?|documentRef?} parks the document for in-app user review — batch it after addVersion, then call the wait_for_review tool.',
       inputSchema: {
