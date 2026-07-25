@@ -6,6 +6,7 @@ import { NotesPanel } from './panels/NotesPanel';
 import { VersionBar } from './panels/VersionBar';
 import { ReviewBar } from './panels/ReviewBar';
 import { PagesBar } from './panels/PagesBar';
+import { PreferencesPanel } from './panels/PreferencesPanel';
 import { ModalHost } from './components/ModalHost';
 import './styles/app.css';
 
@@ -35,6 +36,7 @@ export default function App() {
           <ZoomControls />
         </div>
         <NotesPanel />
+        <PreferencesPanel />
       </div>
       <ModalHost />
     </div>

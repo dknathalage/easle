@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useStore } from '../store/store';
+import { useSettings } from '../store/settings';
 import { getCanvas } from '../store/ipc';
 import type { Version } from '../store/types';
 import { CompareView } from './CompareView';
@@ -46,6 +47,7 @@ export function VersionBar() {
         {usingMock && <span className="vb-mock">mock mode — window.easle not found</span>}
       </div>
       <div className="vb-actions">
+        <button className="vb-gear" title="Preferences" onClick={() => useSettings.getState().toggle()}>⚙</button>
         <button onClick={onSave}>Save version</button>
         <div className="vb-dropdown">
           <button onClick={() => setOpen((o) => !o)}>

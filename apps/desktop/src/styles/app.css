@@ -89,6 +89,23 @@ button { font: inherit; cursor: pointer; }
 .panel-body { flex: 1; overflow: auto; padding: 4px 0; }
 .panel-empty { color: var(--text-dim); padding: 14px 12px; font-size: 12px; line-height: 1.5; }
 
+/* ---------------- preferences panel ---------------- */
+.prefs-panel { border-left: 1px solid var(--border); }
+.prefs-close { border: none; background: none; font-size: 18px; line-height: 1; color: var(--text-dim); padding: 0 4px; }
+.prefs-close:hover { color: var(--text); }
+.prefs-section { padding: 6px 0 8px; border-bottom: 1px solid var(--border); }
+.prefs-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-dim); padding: 6px 12px 2px; }
+.prefs-field { padding: 6px 12px 10px; }
+.prefs-field-head { display: flex; align-items: center; justify-content: space-between; }
+.prefs-field-head label { font-weight: 500; }
+.prefs-reset { border: 1px solid var(--border); background: #fff; border-radius: 5px; padding: 2px 7px; font-size: 11px; color: var(--accent); }
+.prefs-reset:disabled { color: var(--text-dim); opacity: .5; cursor: default; }
+.prefs-range { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.prefs-range input[type="range"] { flex: 1; min-width: 0; }
+.prefs-value { font-variant-numeric: tabular-nums; color: var(--text-dim); min-width: 46px; text-align: right; font-size: 12px; }
+.prefs-help { color: var(--text-dim); font-size: 11px; margin-top: 4px; line-height: 1.4; }
+.vb-gear { font-size: 15px; line-height: 1; padding: 4px 9px !important; }
+
 .group-buttons { display: flex; gap: 4px; }
 .group-buttons button { border: 1px solid var(--border); background: #fff; border-radius: 5px; padding: 2px 8px; font-size: 11px; font-weight: 500; }
 .group-buttons button:disabled { opacity: .4; cursor: not-allowed; }

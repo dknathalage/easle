@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from 'react';
 import { useStore, absolutePos, nodeAtPoint, nodePageId } from '../store/store';
+import { useSettings } from '../store/settings';
 import type { CanvasNode } from '../store/types';
 import { NodeView } from './NodeView';
 import { NotePin } from './NotePin';
 
 const ZOOM_MIN = 0.05;
 const ZOOM_MAX = 8;
-const ZOOM_SENSITIVITY = 0.1;
 
 export function Canvas() {
   const nodes = useStore((s) => s.nodes);
@@ -21,6 +21,7 @@ export function Canvas() {
   const createNote = useStore((s) => s.createNote);
   const setMode = useStore((s) => s.setMode);
   const promptText = useStore((s) => s.promptText);
+  const zoomSensitivity = useSettings((s) => s.settings.zoomSensitivity);
 
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const spaceDown = useRef(false);
@@ -72,7 +73,7 @@ export function Canvas() {
       const py = e.clientY - rect.top;
       const worldX = (px - camera.x) / camera.zoom;
       const worldY = (py - camera.y) / camera.zoom;
-      const factor = Math.exp(-e.deltaY * ZOOM_SENSITIVITY);
+      const factor = Math.exp(-e.deltaY * zoomSensitivity);
       const zoom = clamp(camera.zoom * factor, ZOOM_MIN, ZOOM_MAX);
       setCamera({ zoom, x: px - worldX * zoom, y: py - worldY * zoom });
     } else {
