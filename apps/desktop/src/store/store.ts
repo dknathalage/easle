@@ -375,18 +375,6 @@ export function buildLayerTree(nodes: CanvasNode[]): TreeNode[] {
   return build(null, 0);
 }
 
-// absolute position of a node = sum of ancestor x/y offsets
-export function absolutePos(nodes: CanvasNode[], node: CanvasNode): { x: number; y: number } {
-  let x = node.x;
-  let y = node.y;
-  let cur = node;
-  const byId = new Map(nodes.map((n) => [n.id, n]));
-  while (cur.parentId != null) {
-    const p = byId.get(cur.parentId);
-    if (!p) break;
-    x += p.x;
-    y += p.y;
-    cur = p;
-  }
-  return { x, y };
-}
+// Pure canvas geometry helpers live in ./geometry (dependency-free + unit tested).
+// Re-exported here so existing import sites (`from './store/store'`) keep working.
+export { absolutePos, nodePageId, nodeAtPoint } from './geometry';

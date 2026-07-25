@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from 'react';
-import { useStore, absolutePos } from '../store/store';
+import { useStore, absolutePos, nodeAtPoint, nodePageId } from '../store/store';
 import type { CanvasNode } from '../store/types';
 import { NodeView } from './NodeView';
 import { NotePin } from './NotePin';
@@ -109,7 +109,9 @@ export function Canvas() {
       return;
     }
     const w = screenToWorld(e.clientX, e.clientY);
-    const host = nodeAt(w.x, w.y);
+    // Scope the hit-test to the page being viewed so the note never binds to an
+    // overlapping node on another page (frames across pages share coordinates).
+    const host = nodeAtPoint(nodes, w.x, w.y, currentPageId);
     const body = await promptText('Note');
     if (typeof body === 'string' && body.trim()) {
       if (host) {
@@ -121,19 +123,6 @@ export function Canvas() {
     }
     setMode('select');
   };
-
-  // topmost visible node whose absolute bounds contain a world point
-  function nodeAt(wx: number, wy: number): CanvasNode | null {
-    const hits = nodes.filter((n) => {
-      if (!n.visible) return false;
-      const p = absolutePos(nodes, n);
-      return wx >= p.x && wx <= p.x + n.w && wy >= p.y && wy <= p.y + n.h;
-    });
-    if (!hits.length) return null;
-    // prefer content nodes, then the highest z
-    hits.sort((a, b) => (a.type === 'content' ? 1 : 0) - (b.type === 'content' ? 1 : 0) || a.z - b.z);
-    return hits[hits.length - 1];
-  }
 
   const onPointerMove = (e: ReactPointerEvent) => {
     if (panning.current) {
@@ -161,6 +150,15 @@ export function Canvas() {
     return { x: abs.x + n.x, y: abs.y + n.y };
   };
 
+  // Only show notes for the page being viewed. A note attached to a node belongs
+  // to that node's page; canvas-pinned notes (nodeId=null) are document-level.
+  const pageNotes = notes.filter((n) => {
+    if (n.nodeId == null) return true;
+    const host = nodes.find((x) => x.id === n.nodeId);
+    if (!host) return false;
+    return nodePageId(nodes, host) === currentPageId;
+  });
+
   const cursor = panning.current ? 'grabbing' : spaceDown.current ? 'grab' : mode === 'note' ? 'crosshair' : 'default';
 
   return (
@@ -180,7 +178,7 @@ export function Canvas() {
         {roots.map((n) => (
           <NodeView key={n.id} node={n} childrenNodes={kidsOf(n.id)} allNodes={nodes} />
         ))}
-        {notes.map((n) => {
+        {pageNotes.map((n) => {
           const w = pinWorld(n);
           return <NotePin key={n.id} note={{ ...n, x: w.x, y: w.y }} />;
         })}
