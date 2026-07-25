@@ -6,6 +6,28 @@ export interface Content {
   html: string;
   css: string;
   js: string;
+  // React path (compile-on-write). When `compiled` is set the node renders via
+  // the content-renderer bundle; when null it falls back to legacy html/css/js.
+  source?: string | null;
+  compiled?: string | null;
+}
+
+// Document-level shared styles/js the AI can set (empty by default — blank slate).
+export interface DocumentAssets {
+  css: string;
+  js: string;
+}
+
+// A reusable per-document React component (compiled CJS, references global React).
+export interface ComponentDef {
+  id: number;
+  documentId: number;
+  name: string;
+  source: string;
+  compiled: string;
+  css: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface CanvasNode {
@@ -128,6 +150,9 @@ export interface CanvasApi {
   listVersions(documentId: number): Promise<Version[]>;
   getVersion(id: number): Promise<Version & { snapshot: string }>;
   restoreVersion(id: number): Promise<{ ok: true }>;
+  // react component system
+  getDocumentAssets(documentId: number): Promise<DocumentAssets>;
+  listComponents(documentId: number): Promise<ComponentDef[]>;
   // review loop
   getReviewState(documentId: number): Promise<{ documentId: number; state: ReviewState }>;
   requestReview(documentId: number): Promise<{ ok: true; state: ReviewState }>;

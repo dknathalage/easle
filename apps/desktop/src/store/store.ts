@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { getCanvas } from './ipc';
-import type { CanvasDocument, CanvasNode, Note, NoteStatus, Project, Version } from './types';
+import type { CanvasDocument, CanvasNode, DocumentAssets, Note, NoteStatus, Project, Version } from './types';
 
 export type Mode = 'select' | 'note';
 
@@ -38,6 +38,8 @@ interface StoreState {
   versions: Version[];
   pages: Page[];
   currentPageId: number | null;
+  assets: DocumentAssets; // document-level shared css/js
+  components: Record<string, string>; // component name -> compiled CJS
 
   // ui
   selection: number[]; // node ids
@@ -111,6 +113,8 @@ export const useStore = create<StoreState>((set, get) => ({
   versions: [],
   pages: [],
   currentPageId: null,
+  assets: { css: '', js: '' },
+  components: {},
 
   selection: [],
   camera: { x: 0, y: 0, zoom: 1 },
@@ -172,7 +176,7 @@ export const useStore = create<StoreState>((set, get) => ({
       currentPageId: null,
     });
     if (doc) await get().reload();
-    else set({ nodes: [], notes: [], versions: [], pages: [] });
+    else set({ nodes: [], notes: [], versions: [], pages: [], assets: { css: '', js: '' }, components: {} });
   },
 
   async selectDocument(documentId) {
@@ -184,12 +188,15 @@ export const useStore = create<StoreState>((set, get) => ({
     const api = getCanvas();
     const { documentId, noteFilter } = get();
     if (documentId == null) return;
-    const [tree, notes, versions, pages] = await Promise.all([
+    const [tree, notes, versions, pages, assets, componentList] = await Promise.all([
       api.getTree(documentId),
       api.listNotes({ documentId, status: noteFilter === 'open' ? 'open' : undefined }),
       api.listVersions(documentId),
       api.listPages(documentId),
+      api.getDocumentAssets(documentId),
+      api.listComponents(documentId),
     ]);
+    const components = Object.fromEntries((componentList ?? []).map((c) => [c.name, c.compiled]));
     // prune selection to still-existing nodes
     const ids = new Set(tree.nodes.map((n) => n.id));
     set((s) => {
@@ -203,6 +210,8 @@ export const useStore = create<StoreState>((set, get) => ({
         versions,
         pages,
         currentPageId,
+        assets: assets ?? { css: '', js: '' },
+        components,
         selection: s.selection.filter((id) => ids.has(id)),
       };
     });

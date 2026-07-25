@@ -134,6 +134,8 @@ function buildMock(): CanvasApi {
       return { state: prior, consumed };
     },
     async applyOps() { emit(); return { refs: {}, results: [] }; },
+    async getDocumentAssets() { return { css: '', js: '' }; },
+    async listComponents() { return []; },
     async listPages() { return [{ id: 1, documentId: 1, name: 'Page 1', idx: 0 }]; },
     async createPage(input) { return { id: 2, documentId: input.documentId, name: input.name ?? 'Page', idx: 1 }; },
     async renamePage() { return { ok: true }; },
