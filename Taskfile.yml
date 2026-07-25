@@ -9,8 +9,8 @@ version: '3'
 #   task install-local  # build + copy Easle.app into /Applications (prod install)
 #   task open           # launch the installed app
 #   task mcp:check      # curl the embedded MCP server (app must be running)
-#   task release        # bump semver (patch), build all platforms, publish a GitHub Release
-#   task release BUMP=minor   # ...or minor/major. Builds mac+win+linux locally (needs Wine + Docker).
+#   task release        # Conventional-Commit version + CHANGELOG, build all platforms, publish
+#   task release BUMP=minor   # ...force the bump level (else auto-derived from commits)
 
 vars:
   DESKTOP: apps/desktop
@@ -108,40 +108,35 @@ tasks:
         echo "Preflight OK: clean main @ $(git rev-parse --short HEAD) == origin/main"
 
   release:
-    desc: "Bump semver, build ALL platforms locally, and publish a GitHub Release: task release [BUMP=patch|minor|major]"
+    desc: "Version + changelog from Conventional Commits, build all platforms, publish: task release [BUMP=patch|minor|major]"
     deps: [release:preflight]
-    vars:
-      BUMP: '{{.BUMP | default "patch"}}'
     cmds:
       - |
         set -e
-        # 1) Bump the app version (no git tag/commit yet) and derive the tag.
-        npm version {{.BUMP}} --no-git-tag-version --workspace {{.DESKTOP}} >/dev/null
+        # 1) Bump the version and update CHANGELOG.md from Conventional Commits.
+        #    Auto-derives the semver level (feat->minor, fix->patch, ! ->major);
+        #    pass BUMP=patch|minor|major to force it. Commits + tags (no push).
+        RELEASE_AS=""; [ -n "{{.BUMP}}" ] && RELEASE_AS="--release-as {{.BUMP}}"
+        npx commit-and-tag-version $RELEASE_AS
         NEWVER="$(node -p "require('./{{.DESKTOP}}/package.json').version")"
         TAG="v${NEWVER}"
-        # Revert the version bump if anything below fails, so a failed run is a no-op.
-        trap 'echo "Release failed — reverting version bump."; git checkout -- {{.DESKTOP}}/package.json 2>/dev/null || true' ERR
-        if git rev-parse "$TAG" >/dev/null 2>&1 || gh release view "$TAG" >/dev/null 2>&1; then
-          echo "Release $TAG already exists — bump a different level."; exit 1
-        fi
-        echo "==> Releasing $TAG (bump {{.BUMP}})"
+        # If the build fails below, undo the release commit + tag so it's a no-op.
+        trap 'echo "Build failed — undoing release commit/tag $TAG."; git tag -d "$TAG" 2>/dev/null || true; git reset --hard HEAD~1' ERR
+        echo "==> Releasing $TAG"
 
-        # 2) Build installers for macOS + Windows + Linux locally.
-        #    Requires the cross-build toolchain: Wine (Windows) and Docker or a
-        #    Linux host (Linux). electron-builder errors here if they're missing.
+        # 2) Clean output, then build installers for macOS + Windows + Linux.
+        rm -rf {{.RELEASE}}
         npm run dist --workspace {{.DESKTOP}} -- --mac --win --linux --publish never
 
-        # 3) Collect whatever installers were produced.
+        # 3) Collect the installers (fail — and revert — if none were produced).
         FILES="$(ls {{.RELEASE}}/*.dmg {{.RELEASE}}/*.exe {{.RELEASE}}/*.AppImage {{.RELEASE}}/*.deb 2>/dev/null || true)"
-        [ -n "$FILES" ] || { echo "No installers were produced in {{.RELEASE}}."; exit 1; }
+        [ -n "$FILES" ] || { echo "No installers produced in {{.RELEASE}}."; exit 1; }
         echo "==> Built:"; echo "$FILES" | sed 's/^/    /'
 
-        # 4) Commit the bump, tag, push, and publish the release with the artifacts.
-        git add {{.DESKTOP}}/package.json
-        git commit -m "release $TAG"
-        git tag "$TAG"
-        git push origin main "$TAG"
-        gh release create "$TAG" $FILES --title "$TAG" --generate-notes
+        # 4) Push commit + tag, then publish with this version's changelog section.
+        git push --follow-tags origin main
+        NOTES="$(awk '/^## /{c++} c==1{print} c==2{exit}' CHANGELOG.md)"
+        gh release create "$TAG" $FILES --title "$TAG" --notes "$NOTES"
         trap - ERR
         echo "==> Published $TAG: $(gh release view "$TAG" --json url -q .url)"
 

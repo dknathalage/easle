@@ -12,5 +12,8 @@
     "build": "npm run build --workspace apps/desktop",
     "start": "npm run start --workspace apps/desktop",
     "dist": "npm run dist --workspace apps/desktop"
+  },
+  "devDependencies": {
+    "commit-and-tag-version": "^12.5.0"
   }
 }

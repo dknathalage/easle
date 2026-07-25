@@ -1,0 +1,20 @@
+{
+  "packageFiles": [
+    { "filename": "apps/desktop/package.json", "type": "json" }
+  ],
+  "bumpFiles": [
+    { "filename": "apps/desktop/package.json", "type": "json" }
+  ],
+  "header": "# Changelog\n\nAll notable changes to Easle are documented here. This file is generated from [Conventional Commits](https://www.conventionalcommits.org/) by `task release`.\n",
+  "types": [
+    { "type": "feat", "section": "Features" },
+    { "type": "fix", "section": "Bug Fixes" },
+    { "type": "perf", "section": "Performance" },
+    { "type": "build", "section": "Build & Release" },
+    { "type": "refactor", "section": "Refactoring" },
+    { "type": "docs", "hidden": true },
+    { "type": "chore", "hidden": true },
+    { "type": "test", "hidden": true },
+    { "type": "style", "hidden": true }
+  ]
+}

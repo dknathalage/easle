@@ -23,15 +23,27 @@ Download a prebuilt installer for your OS from the
 [**Releases**](https://github.com/dknathalage/easle/releases/latest) page
 (`.dmg` for macOS, `.exe` for Windows, `.AppImage`/`.deb` for Linux).
 
-On macOS/Linux you can do it in one line:
+On macOS/Linux, one line installs (or **updates** — re-run it any time to get the newest
+version; it overwrites the old one):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dknathalage/easle/main/scripts/install.sh | sh
 ```
 
+On Windows, download the `.exe` from Releases, or fetch the latest with PowerShell:
+
+```powershell
+$u = (irm https://api.github.com/repos/dknathalage/easle/releases/latest).assets |
+     ? { $_.name -like '*-x64.exe' } | select -First 1 -ExpandProperty browser_download_url
+$o = "$env:TEMP\EasleSetup.exe"; iwr $u -OutFile $o; & $o
+```
+
 > The current builds are **unsigned**. On macOS, right-click the app → **Open** the first
 > time (or the installer script clears the quarantine flag for you). On Windows, click
 > **More info → Run anyway** on the SmartScreen prompt.
+>
+> **Updating:** re-run the command above (macOS/Linux) or the installer (Windows) — there
+> is no in-app auto-update.
 
 Then launch Easle. The app serves a loopback JSON API on `127.0.0.1:47600` with the MCP
 server embedded at `/mcp` — **starting the app is all you need**, there's no separate MCP
@@ -94,16 +106,17 @@ npm run dev                                 # Vite + Electron with hot reload
 
 Package installers locally with `npm run dist --workspace apps/desktop` (or `task dist`).
 
-Releases are cut **locally** (no CI). From a clean `main`:
+Releases are cut **locally** (no CI). Commit with [Conventional Commits](https://www.conventionalcommits.org/)
+(`feat:`, `fix:`, `feat!:` …), then from a clean `main`:
 
 ```bash
-task release              # bump patch, build mac+win+linux, publish a GitHub Release
-task release BUMP=minor   # or minor / major
+task release              # version + CHANGELOG from commits, build all platforms, publish
+task release BUMP=minor   # force the bump level instead of auto-deriving it
 ```
 
 `task release` preflights (on `main`, clean tree, `main == origin/main`, `gh` authed),
-bumps the app's semver version, builds installers for **all three platforms**, commits +
-tags + pushes, then creates the GitHub Release with the artifacts. Building Windows from
-another OS needs **Wine**, and Linux needs **Docker** (or a Linux host); electron-builder
-errors if the toolchain is missing, and the task reverts the version bump so a failed run
-is a no-op.
+then via `commit-and-tag-version` derives the semver bump from your commits and updates
+`CHANGELOG.md`, builds installers for **all platforms** (mac arm64+x64, win x64, linux x64
+— `better-sqlite3` prebuilds are fetched per target, so no Wine/Docker needed here), pushes
+the release commit + tag, and publishes the GitHub Release with that version's changelog as
+the notes. If the build fails it undoes the release commit/tag, so a failed run is a no-op.
