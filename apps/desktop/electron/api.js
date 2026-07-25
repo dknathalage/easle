@@ -1,9 +1,9 @@
-// Canvas localhost JSON API — loopback only (127.0.0.1:47600).
+// Easle localhost JSON API — loopback only (127.0.0.1:47600).
 // Wraps the SAME db layer as IPC. No express; plain Node http. CommonJS.
 
 const http = require('http');
 const { URL } = require('url');
-const { API_HOST, API_PORT } = require('@canvas/shared');
+const { API_HOST, API_PORT } = require('@easle/shared');
 
 function readJsonBody(req) {
   return new Promise((resolve, reject) => {

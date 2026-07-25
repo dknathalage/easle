@@ -1,4 +1,4 @@
--- Canvas SQLite schema. Owned by the Electron app (apps/desktop).
+-- Easle SQLite schema. Owned by the Electron app (apps/desktop).
 PRAGMA journal_mode = WAL;
 PRAGMA foreign_keys = ON;
 

@@ -1,4 +1,4 @@
-// Canvas Electron main process — window, DB layer wiring, IPC handlers, localhost API.
+// Easle Electron main process — window, DB layer wiring, IPC handlers, localhost API.
 // CommonJS.
 
 const path = require('path');
@@ -8,7 +8,7 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const { openDb, runSchemaAndSeed } = require('./db');
 const { startApi } = require('./api');
 
-// Same method list registered on preload's window.canvas.
+// Same method list registered on preload's window.easle.
 const DB_METHODS = [
   'listDocuments',
   'getTree',
@@ -40,7 +40,7 @@ let mainWindow = null;
 
 function resolveDbPath() {
   if (process.env.CANVAS_DB_PATH) return process.env.CANVAS_DB_PATH;
-  // default: Canvas/data/canvas.db — electron/ is Canvas/apps/desktop/electron
+  // default: <repo>/data/canvas.db — electron/ is apps/desktop/electron
   const dataDir = path.resolve(__dirname, '..', '..', '..', 'data');
   return path.join(dataDir, 'canvas.db');
 }
@@ -64,7 +64,7 @@ function initDb() {
 
 function registerIpc() {
   for (const method of DB_METHODS) {
-    ipcMain.handle(`canvas:${method}`, (_event, ...args) => {
+    ipcMain.handle(`easle:${method}`, (_event, ...args) => {
       if (!db || typeof db[method] !== 'function') {
         throw new Error(`DB method ${method} unavailable`);
       }
@@ -77,7 +77,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
-    title: 'Canvas',
+    title: 'Easle',
     backgroundColor: '#1e1e1e',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

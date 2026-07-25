@@ -1,4 +1,4 @@
-# Canvas integration contract (build to this exactly)
+# Easle integration contract (build to this exactly)
 
 Three modules are built in parallel against this contract. Do not deviate from names/shapes.
 
@@ -39,13 +39,13 @@ getVersion(id): Version & { snapshot:string }
 restoreVersion(id): { ok:true }                                    // replace live nodes/contents from snapshot
 ```
 
-## Preload IPC (apps/desktop/electron/preload.js) — renderer uses `window.canvas`
+## Preload IPC (apps/desktop/electron/preload.js) — renderer uses `window.easle`
 
-`window.canvas` mirrors the DB layer 1:1 as async methods (Promise-returning, via ipcRenderer.invoke to channels named `canvas:<method>`), PLUS:
+`window.easle` mirrors the DB layer 1:1 as async methods (Promise-returning, via ipcRenderer.invoke to channels named `easle:<method>`), PLUS:
 ```
-window.canvas.onChanged(cb): () => void   // subscribe to main→renderer 'db:changed'; returns unsubscribe
+window.easle.onChanged(cb): () => void   // subscribe to main→renderer 'db:changed'; returns unsubscribe
 ```
-Main registers `ipcMain.handle('canvas:<method>', (e,...args)=>db.<method>(...args))` for every method, and sends `db:changed` to all windows via the emitChanged hook.
+Main registers `ipcMain.handle('easle:<method>', (e,...args)=>db.<method>(...args))` for every method, and sends `db:changed` to all windows via the emitChanged hook.
 
 ## Localhost HTTP API (apps/desktop/electron/api.js) — MCP uses this
 
@@ -74,7 +74,7 @@ Errors: HTTP 4xx/5xx with `{ error: "message" }`.
 
 ## MCP tools (packages/mcp/server.js) — stdio, thin HTTP client to the API
 
-Tool name -> API call. All return compact JSON text. If the API is unreachable, return an error telling the user to start the Canvas app.
+Tool name -> API call. All return compact JSON text. If the API is unreachable, return an error telling the user to start the Easle app.
 ```
 list_documents            -> GET /documents
 get_tree {documentId?}    -> GET /tree (default first document)

@@ -104,7 +104,7 @@ export const useStore = create<StoreState>((set, get) => ({
   collapsed: {},
   noteFilter: 'open',
   loading: true,
-  usingMock: typeof window !== 'undefined' && !window.canvas,
+  usingMock: typeof window !== 'undefined' && !window.easle,
 
   async init() {
     const api = getCanvas();

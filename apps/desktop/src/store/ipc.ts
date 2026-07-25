@@ -1,7 +1,7 @@
-// Thin accessor for the window.canvas bridge exposed by preload.js.
+// Thin accessor for the window.easle bridge exposed by preload.js.
 //
 // When the renderer is loaded outside Electron (e.g. `vite` in a plain browser
-// for UI work), window.canvas is undefined. We provide a small in-memory mock so
+// for UI work), window.easle is undefined. We provide a small in-memory mock so
 // the tool chrome still renders and is inspectable. In Electron this is never used.
 
 import type { CanvasApi, CanvasNode, Note, Version, Tree } from './types';
@@ -23,7 +23,7 @@ function buildMock(): CanvasApi {
       x: 24, y: 120, w: 345, h: 200, z: 0, visible: true, locked: false,
       createdAt: now(), updatedAt: now(),
       content: {
-        html: '<div class="card"><h1>Hello Canvas</h1><p>Mock content node.</p></div>',
+        html: '<div class="card"><h1>Hello Easle</h1><p>Mock content node.</p></div>',
         css: '.card{font-family:system-ui;padding:24px;background:#fff;border-radius:16px;box-shadow:0 8px 24px rgba(0,0,0,.08)}h1{margin:0 0 8px;font-size:20px}p{margin:0;color:#666}',
         js: '',
       },
@@ -127,13 +127,13 @@ function buildMock(): CanvasApi {
 let mock: CanvasApi | null = null;
 
 export function getCanvas(): CanvasApi {
-  if (typeof window !== 'undefined' && window.canvas) return window.canvas;
+  if (typeof window !== 'undefined' && window.easle) return window.easle;
   if (!mock) {
     mock = buildMock();
     // eslint-disable-next-line no-console
-    console.warn('[canvas] window.canvas not found — using in-memory mock (not running in Electron).');
+    console.warn('[easle] window.easle not found — using in-memory mock (not running in Electron).');
   }
   return mock;
 }
 
-export const isElectron = typeof window !== 'undefined' && !!window.canvas;
+export const isElectron = typeof window !== 'undefined' && !!window.easle;

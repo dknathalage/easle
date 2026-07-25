@@ -1,4 +1,4 @@
-// Data shapes mirror Canvas/CONTRACT.md exactly.
+// Data shapes mirror CONTRACT.md exactly.
 
 export type NodeType = 'frame' | 'group' | 'content';
 
@@ -68,7 +68,7 @@ export interface Tree {
   nodes: CanvasNode[];
 }
 
-// The window.canvas bridge (preload.js). All async, Promise-returning.
+// The window.easle bridge (preload.js). All async, Promise-returning.
 export interface CanvasApi {
   listDocuments(): Promise<CanvasDocument[]>;
   getTree(documentId: number): Promise<Tree>;
@@ -114,6 +114,6 @@ export interface CanvasApi {
 
 declare global {
   interface Window {
-    canvas: CanvasApi;
+    easle: CanvasApi;
   }
 }

@@ -1,4 +1,4 @@
-// Canvas DB layer — single source of truth. CommonJS (Electron main).
+// Easle DB layer — single source of truth. CommonJS (Electron main).
 // Wraps better-sqlite3. All methods synchronous. Booleans converted at this boundary.
 // Every mutating method calls emitChanged() after committing.
 
@@ -80,7 +80,7 @@ function runSchemaAndSeed(db) {
   // Accept either the raw better-sqlite3 handle or the openDb() wrapper (which
   // exposes the handle as `_raw`). main.js passes the wrapper.
   const raw = db && typeof db.exec === 'function' ? db : db._raw;
-  const schemaPath = require.resolve('@canvas/shared/schema.sql');
+  const schemaPath = require.resolve('@easle/shared/schema.sql');
   const schema = fs.readFileSync(schemaPath, 'utf8');
   raw.exec(schema);
 
@@ -110,7 +110,7 @@ function runSchemaAndSeed(db) {
       .run(documentId, frameId, 'content', 'Card', 24, 120, 345, 200, 0, 1, 0, ts, ts);
     const contentId = contentInfo.lastInsertRowid;
 
-    const html = `<div class="card"><h2>Welcome to Canvas</h2><p>This is a seeded content node. The AI authors designs here as HTML/CSS/JS.</p><button id="cta">Get started</button></div>`;
+    const html = `<div class="card"><h2>Welcome to Easle</h2><p>This is a seeded content node. The AI authors designs here as HTML/CSS/JS.</p><button id="cta">Get started</button></div>`;
     const css = `*{box-sizing:border-box;margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
 .card{padding:24px;border-radius:16px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;height:100%;display:flex;flex-direction:column;gap:12px;justify-content:center;box-shadow:0 10px 30px rgba(99,102,241,.3)}
 .card h2{font-size:20px;font-weight:700}

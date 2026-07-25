@@ -41,8 +41,8 @@ export function VersionBar() {
   return (
     <div className="version-bar">
       <div className="vb-title">
-        <strong>{doc?.name ?? 'Canvas'}</strong>
-        {usingMock && <span className="vb-mock">mock mode — window.canvas not found</span>}
+        <strong>{doc?.name ?? 'Easle'}</strong>
+        {usingMock && <span className="vb-mock">mock mode — window.easle not found</span>}
       </div>
       <div className="vb-actions">
         <button onClick={onSave}>Save version</button>

@@ -1,8 +1,13 @@
-# Canvas — a local, Figma-style design-iteration tool
+# Easle — a local, Figma-style design-iteration tool
+
+> Note: the canonical, up-to-date design is `docs/spec/2026-07-25-easle-design.md`
+> (projects, embedded MCP over HTTP, batch-first `apply`). This document captures
+> the original v1 architecture; "canvas" here refers both to the pan/zoom surface
+> and, historically, to the product now named Easle.
 
 ## 1. Purpose
 
-Canvas is a local desktop app for **AI-authored, human-reviewed** UI design. The AI builds designs as interactive HTML/CSS/JS "content" nodes, organized on an infinite Figma-style canvas with **layers and groups**. The human pans/zooms, leaves **pinned notes**, and sets status. Every iteration is **versioned**. An **MCP server** exposes the document and notes to the AI over stdio, so the AI reads feedback and pushes new versions programmatically. The two form a tight loop:
+Easle is a local desktop app for **AI-authored, human-reviewed** UI design. The AI builds designs as interactive HTML/CSS/JS "content" nodes, organized on an infinite Figma-style canvas with **layers and groups**. The human pans/zooms, leaves **pinned notes**, and sets status. Every iteration is **versioned**. An **MCP server** exposes the document and notes to the AI over stdio, so the AI reads feedback and pushes new versions programmatically. The two form a tight loop:
 
 > AI authors → human reviews & annotates → AI reads notes via MCP → AI revises (new version) → repeat.
 
@@ -33,17 +38,17 @@ Three cooperating pieces, all local:
 └────────────────────────────┘
         │ SQLite file
         ▼
-   Canvas/data/canvas.db  (WAL)
+   data/canvas.db  (WAL)
 ```
 
-**Why the app owns the DB and the MCP server proxies over HTTP:** `better-sqlite3` is a native module whose binary ABI differs between Electron and plain Node. Having *both* processes open the DB directly means maintaining two incompatible native builds. Instead, the **Electron main process is the sole DB owner** and exposes a tiny **localhost JSON API**; the **stdio MCP server is a dependency-free HTTP client** to that API. One DB layer, two transports (IPC for the renderer, HTTP for MCP). Consequence: **MCP tools require the Canvas app to be running** — acceptable, since iteration happens while the app is open. The MCP server connects lazily per request and returns a clear "start the Canvas app" error if the API is down.
+**Why the app owns the DB and the MCP server proxies over HTTP:** `better-sqlite3` is a native module whose binary ABI differs between Electron and plain Node. Having *both* processes open the DB directly means maintaining two incompatible native builds. Instead, the **Electron main process is the sole DB owner** and exposes a tiny **localhost JSON API**; the **stdio MCP server is a dependency-free HTTP client** to that API. One DB layer, two transports (IPC for the renderer, HTTP for MCP). Consequence: **MCP tools require the Easle app to be running** — acceptable, since iteration happens while the app is open. The MCP server connects lazily per request and returns a clear "start the Easle app" error if the API is down.
 
 **Live refresh:** any mutation (from the renderer *or* the API) runs through the one DB layer, which then broadcasts a `db:changed` event to the renderer; the renderer reloads the affected tree/notes. So AI edits appear in the open app immediately.
 
 ## 4. Directory layout
 
 ```
-Canvas/
+easle/
   package.json               # npm workspaces: apps/*, packages/*
   DESIGN.md
   .gitignore                 # node_modules, data/*.db*
@@ -71,7 +76,9 @@ Canvas/
       server.js              # stdio MCP server → HTTP client to app API
 ```
 
-`.mcp.json` (repo root) gains: `{"canvas": {"command": "node", "args": ["Canvas/packages/mcp/server.js"]}}` — added by the user (config trust), documented in the plan.
+`.mcp.json` (repo root) registers the MCP server. (In the current design the server
+is embedded in the app over HTTP — see `docs/spec/2026-07-25-easle-design.md` §3 —
+so the entry is an HTTP URL rather than a spawned command.)
 
 ## 5. Data model (SQLite)
 
@@ -171,7 +178,7 @@ Tools (thin wrappers over the localhost API):
 | `add_version({documentId, summary})` | snapshot current state |
 | `list_versions(documentId)` / `restore_version(id)` | history |
 
-Resource: `canvas://document/<id>/tree` (read-only tree JSON). All tools return compact JSON; errors are actionable (e.g. "Canvas app not running — start it and retry").
+Resource: `canvas://document/<id>/tree` (read-only tree JSON). All tools return compact JSON; errors are actionable (e.g. "Easle app not running — start it and retry").
 
 ## 10. Iteration loop (sequence)
 
@@ -203,4 +210,4 @@ Resource: `canvas://document/<id>/tree` (read-only tree JSON). All tools return 
 
 ## 13. Out of scope / later
 
-User-authoring toolbar (create/edit content in-app), visual pixel-diff between versions, richer note-thread UI, multi-document workspace switching, export (PNG/HTML bundle), packaging/installers, and importing external design sets (e.g. the Tallyo mockups) as content.
+User-authoring toolbar (create/edit content in-app), visual pixel-diff between versions, richer note-thread UI, multi-document workspace switching, export (PNG/HTML bundle), packaging/installers, and importing external design sets as content.

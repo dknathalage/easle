@@ -1,5 +1,5 @@
-// Canvas preload — exposes window.canvas to the renderer via contextBridge.
-// Each DB-layer method maps 1:1 to ipcRenderer.invoke('canvas:<method>', ...args).
+// Easle preload — exposes window.easle to the renderer via contextBridge.
+// Each DB-layer method maps 1:1 to ipcRenderer.invoke('easle:<method>', ...args).
 // Plus onChanged(cb) subscribing to main->renderer 'db:changed'.
 
 const { contextBridge, ipcRenderer } = require('electron');
@@ -30,13 +30,13 @@ const METHODS = [
   'restoreVersion',
 ];
 
-const canvas = {};
+const easle = {};
 for (const method of METHODS) {
-  canvas[method] = (...args) => ipcRenderer.invoke(`canvas:${method}`, ...args);
+  easle[method] = (...args) => ipcRenderer.invoke(`easle:${method}`, ...args);
 }
 
 // Subscribe to db:changed; returns an unsubscribe function.
-canvas.onChanged = (cb) => {
+easle.onChanged = (cb) => {
   const listener = () => {
     try {
       cb();
@@ -48,4 +48,4 @@ canvas.onChanged = (cb) => {
   return () => ipcRenderer.removeListener('db:changed', listener);
 };
 
-contextBridge.exposeInMainWorld('canvas', canvas);
+contextBridge.exposeInMainWorld('easle', easle);

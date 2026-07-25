@@ -1,4 +1,4 @@
-# Canvas
+# Easle
 
 A local, Figma-style design-iteration tool. The **AI authors** designs as interactive HTML/CSS/JS content nodes on an infinite canvas with layers and groups; **you review**, leave pinned notes, and set status; every iteration is **versioned**. A stdio **MCP server** lets the AI read your notes and push new versions.
 
@@ -7,7 +7,7 @@ See [`DESIGN.md`](./DESIGN.md) for the full design and [`CONTRACT.md`](./CONTRAC
 ## Layout
 
 ```
-Canvas/
+easle/
   apps/desktop      Electron app: SQLite (owner) + IPC + localhost API + React renderer
   packages/shared   schema.sql + shared constants
   packages/mcp      stdio MCP server (proxies the app's localhost API)
@@ -17,7 +17,6 @@ Canvas/
 ## Run
 
 ```bash
-cd Canvas
 npm install
 # better-sqlite3 must match Electron's ABI:
 npm run rebuild --workspace apps/desktop     # runs @electron/rebuild for better-sqlite3
@@ -33,9 +32,9 @@ Add to your project's `.mcp.json` (this is a config-trust decision, so you add i
 ```json
 {
   "mcpServers": {
-    "canvas": {
+    "easle": {
       "command": "node",
-      "args": ["Canvas/packages/mcp/server.js"]
+      "args": ["packages/mcp/server.js"]
     }
   }
 }
