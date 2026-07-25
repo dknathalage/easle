@@ -6,7 +6,13 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 // DB-layer method names (mirror db.js). Keep in sync with main.js handlers.
 const METHODS = [
+  'listProjects',
+  'getProject',
+  'createProject',
+  'updateProject',
+  'deleteProject',
   'listDocuments',
+  'createDocument',
   'getTree',
   'getNode',
   'listPages',

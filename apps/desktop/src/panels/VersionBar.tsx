@@ -3,9 +3,9 @@ import { useStore } from '../store/store';
 import { getCanvas } from '../store/ipc';
 import type { Version } from '../store/types';
 import { CompareView } from './CompareView';
+import { ProjectBar } from './ProjectBar';
 
 export function VersionBar() {
-  const doc = useStore((s) => s.document);
   const versions = useStore((s) => s.versions);
   const usingMock = useStore((s) => s.usingMock);
   const saveVersion = useStore((s) => s.saveVersion);
@@ -41,7 +41,8 @@ export function VersionBar() {
   return (
     <div className="version-bar">
       <div className="vb-title">
-        <strong>{doc?.name ?? 'Easle'}</strong>
+        <strong className="vb-brand">Easle</strong>
+        <ProjectBar />
         {usingMock && <span className="vb-mock">mock mode — window.easle not found</span>}
       </div>
       <div className="vb-actions">

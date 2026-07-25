@@ -8,7 +8,8 @@ import type { CanvasApi, CanvasNode, Note, Version, Tree } from './types';
 
 function buildMock(): CanvasApi {
   const now = () => new Date().toISOString();
-  const doc = { id: 1, name: 'Demo (mock)', createdAt: now(), updatedAt: now() };
+  const project = { id: 1, name: 'Demo (mock)', createdAt: now(), updatedAt: now() };
+  const doc = { id: 1, name: 'Demo (mock)', projectId: 1, createdAt: now(), updatedAt: now() };
   let nid = 100;
   let noteId = 100;
   let verId = 100;
@@ -35,7 +36,13 @@ function buildMock(): CanvasApi {
   const emit = () => listeners.forEach((l) => l());
 
   return {
-    async listDocuments() { return [doc]; },
+    async listProjects() { return [{ ...project, documentCount: 1 }]; },
+    async getProject() { return { project: { ...project }, documents: [{ ...doc }] }; },
+    async createProject(input) { return { ...project, name: input.name ?? 'Untitled Project' }; },
+    async updateProject(_id, patch) { return { ...project, name: patch.name ?? project.name }; },
+    async deleteProject() { emit(); return { ok: true }; },
+    async listDocuments() { return [{ ...doc }]; },
+    async createDocument(input) { return { ...doc, id: ++nid, name: input.name ?? 'Untitled', projectId: input.projectId }; },
     async getTree(): Promise<Tree> { return { document: doc, nodes: nodes.map((n) => ({ ...n })) }; },
     async getNode(id) { return nodes.find((n) => n.id === id) ?? null; },
     async createNode(input) {

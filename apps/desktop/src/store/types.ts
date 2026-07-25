@@ -56,9 +56,18 @@ export interface Version {
   snapshot?: string; // present on getVersion
 }
 
+export interface Project {
+  id: number;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  documentCount?: number; // present on listProjects
+}
+
 export interface CanvasDocument {
   id: number;
   name: string;
+  projectId?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -70,7 +79,13 @@ export interface Tree {
 
 // The window.easle bridge (preload.js). All async, Promise-returning.
 export interface CanvasApi {
-  listDocuments(): Promise<CanvasDocument[]>;
+  listProjects(): Promise<Project[]>;
+  getProject(id: number): Promise<{ project: Project; documents: CanvasDocument[] }>;
+  createProject(input: { name?: string }): Promise<Project>;
+  updateProject(id: number, patch: { name?: string }): Promise<Project>;
+  deleteProject(id: number): Promise<{ ok: true }>;
+  listDocuments(filter?: { projectId?: number }): Promise<CanvasDocument[]>;
+  createDocument(input: { projectId: number; name?: string }): Promise<CanvasDocument>;
   getTree(documentId: number): Promise<Tree>;
   getNode(id: number): Promise<CanvasNode | null>;
   listPages(documentId: number): Promise<import('./store').Page[]>;

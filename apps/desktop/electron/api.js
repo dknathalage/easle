@@ -68,9 +68,44 @@ function startApi(db) {
         return sendJson(res, 200, { ok: true });
       }
 
-      // ---- GET /documents ----------------------------------------------
+      // ---- GET /projects -----------------------------------------------
+      if (method === 'GET' && path === '/projects') {
+        return sendJson(res, 200, db.listProjects());
+      }
+
+      // ---- /project ... -------------------------------------------------
+      if (seg[0] === 'project') {
+        // POST /project
+        if (method === 'POST' && seg.length === 1) {
+          const body = await readJsonBody(req);
+          return sendJson(res, 200, db.createProject(body));
+        }
+        if (seg.length === 2) {
+          const id = num(seg[1]);
+          if (id === undefined) return sendJson(res, 400, { error: 'Invalid project id' });
+          if (method === 'GET') {
+            return sendJson(res, 200, db.getProject(id));
+          }
+          if (method === 'PATCH') {
+            const body = await readJsonBody(req);
+            return sendJson(res, 200, db.updateProject(id, body));
+          }
+          if (method === 'DELETE') {
+            return sendJson(res, 200, db.deleteProject(id));
+          }
+        }
+      }
+
+      // ---- GET /documents?projectId= -----------------------------------
       if (method === 'GET' && path === '/documents') {
-        return sendJson(res, 200, db.listDocuments());
+        const projectId = num(q.get('projectId'));
+        return sendJson(res, 200, db.listDocuments({ projectId }));
+      }
+
+      // ---- POST /document ----------------------------------------------
+      if (method === 'POST' && path === '/document') {
+        const body = await readJsonBody(req);
+        return sendJson(res, 200, db.createDocument(body));
       }
 
       // ---- GET /tree?documentId= ---------------------------------------

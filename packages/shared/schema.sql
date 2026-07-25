@@ -2,12 +2,23 @@
 PRAGMA journal_mode = WAL;
 PRAGMA foreign_keys = ON;
 
-CREATE TABLE IF NOT EXISTS documents (
+-- top-level grouping above documents (one install → many projects)
+CREATE TABLE IF NOT EXISTS projects (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS documents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+-- idx_documents_project is created in db.js's migrateProjects() (after the
+-- project_id column is guaranteed to exist on pre-existing dbs).
 
 -- Figma-like node tree. type: 'frame' | 'group' | 'content'
 CREATE TABLE IF NOT EXISTS nodes (

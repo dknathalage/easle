@@ -10,7 +10,13 @@ const { startApi } = require('./api');
 
 // Same method list registered on preload's window.easle.
 const DB_METHODS = [
+  'listProjects',
+  'getProject',
+  'createProject',
+  'updateProject',
+  'deleteProject',
   'listDocuments',
+  'createDocument',
   'getTree',
   'getNode',
   'listPages',

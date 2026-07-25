@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { getCanvas } from './ipc';
-import type { CanvasDocument, CanvasNode, Note, NoteStatus, Version } from './types';
+import type { CanvasDocument, CanvasNode, Note, NoteStatus, Project, Version } from './types';
 
 export type Mode = 'select' | 'note';
 
@@ -28,7 +28,10 @@ export interface Camera {
 
 interface StoreState {
   // data
-  documentId: number | null;
+  projects: Project[];
+  currentProjectId: number | null;
+  documents: CanvasDocument[]; // documents under the current project
+  documentId: number | null; // the active document (currentDocumentId)
   document: CanvasDocument | null;
   nodes: CanvasNode[];
   notes: Note[];
@@ -49,6 +52,11 @@ interface StoreState {
   // lifecycle
   init(): Promise<void>;
   reload(): Promise<void>;
+  refreshProjects(): Promise<void>;
+
+  // project / document switching
+  selectProject(projectId: number): Promise<void>;
+  selectDocument(documentId: number): Promise<void>;
 
   // selection
   select(id: number, additive?: boolean): void;
@@ -89,6 +97,9 @@ interface StoreState {
 }
 
 export const useStore = create<StoreState>((set, get) => ({
+  projects: [],
+  currentProjectId: null,
+  documents: [],
   documentId: null,
   document: null,
   nodes: [],
@@ -108,18 +119,61 @@ export const useStore = create<StoreState>((set, get) => ({
 
   async init() {
     const api = getCanvas();
-    const docs = await api.listDocuments();
-    const doc = docs[0];
-    if (!doc) {
-      set({ loading: false });
+    const projects = await api.listProjects();
+    const project = projects[0];
+    if (!project) {
+      set({ projects, loading: false });
       return;
     }
-    set({ documentId: doc.id, document: doc, loading: false });
-    await get().reload();
+    const { documents } = await api.getProject(project.id);
+    const doc = documents[0];
+    set({
+      projects,
+      currentProjectId: project.id,
+      documents,
+      documentId: doc ? doc.id : null,
+      document: doc ?? null,
+      loading: false,
+    });
+    if (doc) await get().reload();
     // live refresh on any DB change (renderer or MCP)
     api.onChanged(() => {
+      get().refreshProjects();
       get().reload();
     });
+  },
+
+  async refreshProjects() {
+    const api = getCanvas();
+    const projects = await api.listProjects();
+    const { currentProjectId } = get();
+    if (currentProjectId != null && projects.some((p) => p.id === currentProjectId)) {
+      const { documents } = await api.getProject(currentProjectId);
+      set({ projects, documents });
+    } else {
+      set({ projects });
+    }
+  },
+
+  async selectProject(projectId) {
+    const api = getCanvas();
+    const { documents } = await api.getProject(projectId);
+    const doc = documents[0];
+    set({
+      currentProjectId: projectId,
+      documents,
+      documentId: doc ? doc.id : null,
+      document: doc ?? null,
+      selection: [],
+      currentPageId: null,
+    });
+    if (doc) await get().reload();
+    else set({ nodes: [], notes: [], versions: [], pages: [] });
+  },
+
+  async selectDocument(documentId) {
+    set({ documentId, selection: [], currentPageId: null });
+    await get().reload();
   },
 
   async reload() {

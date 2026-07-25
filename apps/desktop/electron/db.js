@@ -9,11 +9,22 @@ const now = () => new Date().toISOString();
 
 // ---- row <-> shape mappers -----------------------------------------------
 
+function mapProject(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 function mapDocument(row) {
   if (!row) return null;
   return {
     id: row.id,
     name: row.name,
+    projectId: row.project_id === null || row.project_id === undefined ? null : row.project_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -89,17 +100,28 @@ function runSchemaAndSeed(db) {
 
   const ts = now();
   const seed = raw.transaction(() => {
-    const docInfo = raw
-      .prepare('INSERT INTO documents (name, created_at, updated_at) VALUES (?,?,?)')
+    const projectInfo = raw
+      .prepare('INSERT INTO projects (name, created_at, updated_at) VALUES (?,?,?)')
       .run('Demo', ts, ts);
+    const projectId = projectInfo.lastInsertRowid;
+
+    const docInfo = raw
+      .prepare('INSERT INTO documents (name, project_id, created_at, updated_at) VALUES (?,?,?,?)')
+      .run('Demo', projectId, ts, ts);
     const documentId = docInfo.lastInsertRowid;
+
+    // one Figma-style page for the seed frame to live under
+    const pageInfo = raw
+      .prepare('INSERT INTO pages (document_id, name, idx, created_at, updated_at) VALUES (?,?,?,?,?)')
+      .run(documentId, 'Page 1', 0, ts, ts);
+    const pageId = pageInfo.lastInsertRowid;
 
     const frameInfo = raw
       .prepare(
-        `INSERT INTO nodes (document_id, parent_id, type, name, x, y, w, h, z, visible, locked, created_at, updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
+        `INSERT INTO nodes (document_id, parent_id, page_id, type, name, x, y, w, h, z, visible, locked, created_at, updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
       )
-      .run(documentId, null, 'frame', 'Screen 1', 80, 80, 393, 852, 0, 1, 0, ts, ts);
+      .run(documentId, null, pageId, 'frame', 'Screen 1', 80, 80, 393, 852, 0, 1, 0, ts, ts);
     const frameId = frameInfo.lastInsertRowid;
 
     const contentInfo = raw
@@ -131,6 +153,45 @@ function openDb(dbPath, opts = {}) {
   const database = new Database(dbPath);
   database.pragma('journal_mode = WAL');
   database.pragma('foreign_keys = ON');
+
+  // Ensure the base schema exists before running migrations. schema.sql is all
+  // `CREATE TABLE IF NOT EXISTS`, so this is safe to run every open (and
+  // runSchemaAndSeed re-running it is a no-op). Without this, the migrations
+  // below (ALTER TABLE nodes/documents) would throw on a brand-new db.
+  {
+    const schemaPath = require.resolve('@easle/shared/schema.sql');
+    database.exec(fs.readFileSync(schemaPath, 'utf8'));
+  }
+
+  // -- migration: projects (top-level grouping above documents) ---------------
+  (function migrateProjects() {
+    database.exec(`CREATE TABLE IF NOT EXISTS projects (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )`);
+    const cols = database.prepare('PRAGMA table_info(documents)').all().map((c) => c.name);
+    if (!cols.includes('project_id')) {
+      database.exec(
+        'ALTER TABLE documents ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE'
+      );
+    }
+    database.exec('CREATE INDEX IF NOT EXISTS idx_documents_project ON documents(project_id)');
+    // Assign any orphan documents (project_id IS NULL) to a default project.
+    const orphans = database
+      .prepare('SELECT COUNT(*) c FROM documents WHERE project_id IS NULL')
+      .get().c;
+    if (orphans > 0) {
+      const ts = now();
+      const info = database
+        .prepare('INSERT INTO projects (name, created_at, updated_at) VALUES (?,?,?)')
+        .run('Untitled Project', ts, ts);
+      database
+        .prepare('UPDATE documents SET project_id = ? WHERE project_id IS NULL')
+        .run(info.lastInsertRowid);
+    }
+  })();
 
   // -- migration: pages (Figma-style pages that group top-level frames) -------
   (function migratePages() {
@@ -187,13 +248,99 @@ function openDb(dbPath, opts = {}) {
       .prepare('UPDATE documents SET updated_at = ? WHERE id = ?')
       .run(ts, documentId);
 
+  // -- projects -------------------------------------------------------------
+
+  function listProjects() {
+    return database
+      .prepare('SELECT * FROM projects ORDER BY id ASC')
+      .all()
+      .map((row) => {
+        const project = mapProject(row);
+        project.documentCount = database
+          .prepare('SELECT COUNT(*) AS c FROM documents WHERE project_id = ?')
+          .get(row.id).c;
+        return project;
+      });
+  }
+
+  function getProject(id) {
+    const project = mapProject(
+      database.prepare('SELECT * FROM projects WHERE id = ?').get(id)
+    );
+    if (!project) throw new Error(`Project ${id} not found`);
+    const documents = database
+      .prepare('SELECT * FROM documents WHERE project_id = ? ORDER BY id ASC')
+      .all(id)
+      .map(mapDocument);
+    return { project, documents };
+  }
+
+  function createProject({ name } = {}) {
+    const ts = now();
+    const info = database
+      .prepare('INSERT INTO projects (name, created_at, updated_at) VALUES (?,?,?)')
+      .run(name != null ? name : 'Untitled Project', ts, ts);
+    emitChanged();
+    return mapProject(database.prepare('SELECT * FROM projects WHERE id = ?').get(info.lastInsertRowid));
+  }
+
+  function updateProject(id, patch = {}) {
+    const row = database.prepare('SELECT * FROM projects WHERE id = ?').get(id);
+    if (!row) throw new Error(`Project ${id} not found`);
+    const ts = now();
+    if ('name' in patch) {
+      database
+        .prepare('UPDATE projects SET name = ?, updated_at = ? WHERE id = ?')
+        .run(patch.name, ts, id);
+    }
+    emitChanged();
+    return mapProject(database.prepare('SELECT * FROM projects WHERE id = ?').get(id));
+  }
+
+  function deleteProject(id) {
+    const row = database.prepare('SELECT * FROM projects WHERE id = ?').get(id);
+    if (!row) throw new Error(`Project ${id} not found`);
+    // ON DELETE CASCADE removes documents -> pages/nodes/notes/versions.
+    database.prepare('DELETE FROM projects WHERE id = ?').run(id);
+    emitChanged();
+    return { ok: true };
+  }
+
   // -- documents ------------------------------------------------------------
 
-  function listDocuments() {
+  function listDocuments(filter = {}) {
+    const projectId = filter && filter.projectId != null ? filter.projectId : undefined;
+    if (projectId !== undefined) {
+      return database
+        .prepare('SELECT * FROM documents WHERE project_id = ? ORDER BY id ASC')
+        .all(projectId)
+        .map(mapDocument);
+    }
     return database
       .prepare('SELECT * FROM documents ORDER BY id ASC')
       .all()
       .map(mapDocument);
+  }
+
+  function createDocument({ projectId, name } = {}) {
+    if (projectId == null) throw new Error('createDocument: projectId is required');
+    const project = database.prepare('SELECT id FROM projects WHERE id = ?').get(projectId);
+    if (!project) throw new Error(`Project ${projectId} not found`);
+    const ts = now();
+    let documentId;
+    const tx = database.transaction(() => {
+      const info = database
+        .prepare('INSERT INTO documents (name, project_id, created_at, updated_at) VALUES (?,?,?,?)')
+        .run(name != null ? name : 'Untitled', projectId, ts, ts);
+      documentId = info.lastInsertRowid;
+      // every document starts with one page so the canvas has somewhere to draw
+      database
+        .prepare('INSERT INTO pages (document_id, name, idx, created_at, updated_at) VALUES (?,?,?,?,?)')
+        .run(documentId, 'Page 1', 0, ts, ts);
+    });
+    tx();
+    emitChanged();
+    return mapDocument(database.prepare('SELECT * FROM documents WHERE id = ?').get(documentId));
   }
 
   function getTree(documentId) {
@@ -764,8 +911,15 @@ function openDb(dbPath, opts = {}) {
     setOnChanged(fn) {
       onChanged = typeof fn === 'function' ? fn : () => {};
     },
+    // projects
+    listProjects,
+    getProject,
+    createProject,
+    updateProject,
+    deleteProject,
     // documents
     listDocuments,
+    createDocument,
     getTree,
     getNode,
     // pages
