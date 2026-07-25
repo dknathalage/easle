@@ -9,6 +9,7 @@ version: '3'
 #   task install-local  # build + copy Easle.app into /Applications (prod install)
 #   task open           # launch the installed app
 #   task mcp:check      # curl the embedded MCP server (app must be running)
+#   task release TAG=v0.1.1   # cut/append a GitHub Release from a clean main (host OS)
 
 vars:
   DESKTOP: apps/desktop
@@ -87,6 +88,45 @@ tasks:
           -H 'content-type: application/json' \
           -H 'accept: application/json, text/event-stream' \
           -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+
+  release:preflight:
+    desc: "Verify a clean working tree identical to origin/main, and TAG == package version"
+    cmds:
+      - |
+        set -e
+        command -v gh >/dev/null 2>&1 || { echo "gh (GitHub CLI) is required and must be authed."; exit 1; }
+        test -n "{{.TAG}}" || { echo "Set TAG, e.g.  task release TAG=v0.1.1"; exit 1; }
+        BR="$(git rev-parse --abbrev-ref HEAD)"
+        [ "$BR" = "main" ] || { echo "On '$BR', not main — releases are cut from main."; exit 1; }
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "Working tree is not clean — commit or stash first:"; git status --short; exit 1
+        fi
+        git fetch --quiet origin main
+        LOCAL="$(git rev-parse HEAD)"; REMOTE="$(git rev-parse origin/main)"
+        [ "$LOCAL" = "$REMOTE" ] || { echo "Local main ($LOCAL) != origin/main ($REMOTE). Push/pull so they match."; exit 1; }
+        VER="v$(node -p "require('./{{.DESKTOP}}/package.json').version")"
+        [ "{{.TAG}}" = "$VER" ] || { echo "TAG {{.TAG}} != package.json version $VER — bump the version or fix TAG."; exit 1; }
+        echo "Preflight OK: clean main @ $(git rev-parse --short HEAD) == origin/main, version $VER"
+
+  release:
+    desc: "Build host-OS installers from a clean main and publish to a GitHub Release: task release TAG=v0.1.1"
+    deps: [release:preflight]
+    cmds:
+      - task: dist
+      - |
+        set -e
+        cd {{.RELEASE}}
+        FILES="$(ls *.dmg *.exe *.AppImage *.deb 2>/dev/null || true)"
+        [ -n "$FILES" ] || { echo "No installers found in {{.RELEASE}} — did the build succeed?"; exit 1; }
+        echo "Installers: $FILES"
+        if gh release view "{{.TAG}}" >/dev/null 2>&1; then
+          echo "Release {{.TAG}} exists — uploading this OS's installers"
+          gh release upload "{{.TAG}}" $FILES --clobber
+        else
+          echo "Creating release {{.TAG}} (tag at current main)"
+          gh release create "{{.TAG}}" $FILES --title "{{.TAG}}" --generate-notes --target "$(git rev-parse HEAD)"
+        fi
+      - echo "Published. Run 'task release TAG={{.TAG}}' on macOS/Windows/Linux to add each OS's installer."
 
   clean:
     desc: Remove build output (release/ and dist/)

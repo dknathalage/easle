@@ -1,20 +1,23 @@
 name: release
 
-# Build Easle installers for macOS (arm64 + Intel), Windows, and Linux, then
-# attach them to a GitHub Release. Triggered by pushing a version tag:
+# OPTIONAL cross-platform build helper. The primary release path is local:
+#   task release TAG=v0.1.1        (see Taskfile.yml — builds the host OS + publishes)
 #
-#   npm version patch --workspace apps/desktop   # or bump manually
-#   git tag v0.1.1 && git push origin v0.1.1
-#
-# Each matrix runner builds installers for its OWN OS/arch (no cross-compiling
-# the native better-sqlite3 module), so users download a prebuilt app instead of
-# building from source.
+# This workflow is MANUAL (workflow_dispatch). Given an existing release tag as
+# input, each matrix runner builds installers for its OWN OS/arch (no cross-
+# compiling the native better-sqlite3 module) and uploads them to that release —
+# handy for adding the Windows/Linux installers when you only have a Mac locally.
 
 on:
-  push:
-    tags:
-      - 'v*'
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to attach installers to (e.g. v0.1.1)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -29,49 +32,31 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}   # build the exact released commit
 
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: npm
 
+      # `npm install` (not `npm ci`): the committed lockfile only records the
+      # host-platform rollup/native optional deps, so `npm ci` misses this OS's
+      # binaries (npm/cli#4828). install reconciles them per-runner.
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Build installers
         run: npm run dist --workspace apps/desktop -- --publish never
         env:
-          # Unsigned builds: don't let electron-builder try to sign on macOS CI.
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'  # unsigned builds — don't attempt signing
 
-      - name: Upload installers
-        uses: actions/upload-artifact@v4
-        with:
-          name: easle-${{ matrix.os }}
-          path: |
-            apps/desktop/release/*.dmg
-            apps/desktop/release/*.exe
-            apps/desktop/release/*.AppImage
-            apps/desktop/release/*.deb
-          if-no-files-found: warn
-
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    # Only cut a Release for tag pushes (manual runs just produce artifacts above).
-    if: startsWith(github.ref, 'refs/tags/')
-    permissions:
-      contents: write
-    steps:
-      - name: Download all installers
-        uses: actions/download-artifact@v4
-        with:
-          path: dist
-          merge-multiple: true
-
-      - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/*
-          generate_release_notes: true
-          fail_on_unmatched_files: false
+      - name: Upload installers to the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd apps/desktop/release
+          files=$(ls *.dmg *.exe *.AppImage *.deb 2>/dev/null || true)
+          [ -n "$files" ] || { echo "No installers produced on ${{ matrix.os }}"; exit 1; }
+          echo "Uploading: $files"
+          gh release upload "${{ inputs.tag }}" $files --clobber --repo "$GITHUB_REPOSITORY"
