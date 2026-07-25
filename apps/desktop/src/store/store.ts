@@ -89,6 +89,10 @@ interface StoreState {
   saveVersion(summary: string): Promise<void>;
   restoreVersion(id: number): Promise<void>;
 
+  // review loop (user side)
+  submitReview(): Promise<void>;
+  approveReview(): Promise<void>;
+
   // in-app modal (prompt/confirm)
   modal: ModalState | null;
   promptText(title: string, defaultValue?: string): Promise<string | null>;
@@ -315,6 +319,20 @@ export const useStore = create<StoreState>((set, get) => ({
   async restoreVersion(id) {
     const api = getCanvas();
     await api.restoreVersion(id);
+    await get().reload();
+  },
+
+  async submitReview() {
+    const { documentId } = get();
+    if (documentId == null) return;
+    await getCanvas().submitReview(documentId);
+    await get().reload();
+  },
+
+  async approveReview() {
+    const { documentId } = get();
+    if (documentId == null) return;
+    await getCanvas().approveReview(documentId);
     await get().reload();
   },
 

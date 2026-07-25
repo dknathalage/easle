@@ -34,6 +34,11 @@ const METHODS = [
   'listVersions',
   'getVersion',
   'restoreVersion',
+  'getReviewState',
+  'requestReview',
+  'submitReview',
+  'approveReview',
+  'consumeReview',
   'applyOps',
 ];
 

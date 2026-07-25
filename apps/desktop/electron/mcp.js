@@ -108,6 +108,59 @@ function createMcpServer(db) {
     textTool(async ({ id }) => db.getVersion(id))
   );
 
+  // ---- review loop --------------------------------------------------------
+
+  server.registerTool(
+    'get_review_state',
+    {
+      description:
+        'Peek the document review state without blocking: idle | awaiting | changes_requested | approved. Defaults to the first document.',
+      inputSchema: { documentId: z.number().int().optional() },
+    },
+    textTool(async ({ documentId }) => db.getReviewState(documentId ?? firstDocumentId(db)))
+  );
+
+  server.registerTool(
+    'wait_for_review',
+    {
+      description:
+        "Block until the user reviews the current version in the Easle app, then return their verdict. " +
+        "Call this AFTER apply([...changes, {op:'addVersion',...}, {op:'requestReview'}]). It long-polls up to ~25s and returns one of:\n" +
+        "- { status:'pending' }  — the user hasn't acted yet; CALL wait_for_review AGAIN to keep waiting.\n" +
+        "- { status:'changes_requested', notes:[...] } — the user pressed Submit review; address the open user notes, resolveNote each, addVersion + requestReview, then wait again.\n" +
+        "- { status:'approved', notes:[...] } — the user pressed Approve & continue; stop the loop and continue your task.\n" +
+        'Defaults to the first document. `notes` are the open notes the user left.',
+      inputSchema: {
+        documentId: z.number().int().optional(),
+        timeoutMs: z.number().int().optional(),
+      },
+    },
+    textTool(async ({ documentId, timeoutMs }) => {
+      const docId = documentId ?? firstDocumentId(db);
+      const cap = Math.min(Math.max(timeoutMs ?? 25000, 1000), 25000);
+      const deadline = Date.now() + cap;
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+      // Poll the review state; consume (reset to idle) once the user has acted.
+      for (;;) {
+        const { state } = db.getReviewState(docId);
+        if (state === 'changes_requested' || state === 'approved') {
+          db.consumeReview(docId);
+          const openNotes = db.listNotes({ documentId: docId, status: 'open' })
+            .filter((n) => n.author === 'user');
+          if (state === 'approved') return { status: 'approved', notes: openNotes };
+          const versions = db.listVersions(docId);
+          return {
+            status: 'changes_requested',
+            notes: openNotes,
+            latestVersion: versions.length ? versions[versions.length - 1] : null,
+          };
+        }
+        if (Date.now() >= deadline) return { status: 'pending', state };
+        await sleep(500);
+      }
+    })
+  );
+
   // ---- write tool (apply) is registered in Phase 4 ------------------------
   if (typeof db.applyOps === 'function') {
     registerApply(server, db);
@@ -131,7 +184,8 @@ function registerApply(server, db) {
         '{"op":"createPage","ref":"pg","documentRef":"d","name":"Page 1"},' +
         '{"op":"createNode","ref":"frame","documentRef":"d","pageRef":"pg","type":"frame","name":"Screen","x":80,"y":80},' +
         '{"op":"createNode","documentRef":"d","parentRef":"frame","type":"content","name":"Card","content":{"html":"<div>hi</div>","css":".x{}","js":""}}]\n' +
-        'Op kinds: createProject, createDocument, createPage, createNode, updateProject, updateDocument, updatePage, updateNode, setContent, moveNode, groupNodes, ungroup, deleteNode, deletePage, deleteDocument, deleteProject, createNote, resolveNote, addVersion, restoreVersion.',
+        'Op kinds: createProject, createDocument, createPage, createNode, updateProject, updateDocument, updatePage, updateNode, setContent, moveNode, groupNodes, ungroup, deleteNode, deletePage, deleteDocument, deleteProject, createNote, resolveNote, addVersion, restoreVersion, requestReview.\n' +
+        'requestReview {documentId?|documentRef?} parks the document for in-app user review — batch it after addVersion, then call the wait_for_review tool.',
       inputSchema: {
         ops: z.array(z.object({ op: z.string() }).passthrough()),
       },

@@ -1,4 +1,4 @@
-# Easle — a local, Figma-style design-iteration tool
+# Easle — a local, infinite-canvas design-iteration tool
 
 > Note: the canonical, up-to-date design is `docs/spec/2026-07-25-easle-design.md`
 > (projects, embedded MCP over HTTP, batch-first `apply`). This document captures
@@ -7,7 +7,7 @@
 
 ## 1. Purpose
 
-Easle is a local desktop app for **AI-authored, human-reviewed** UI design. The AI builds designs as interactive HTML/CSS/JS "content" nodes, organized on an infinite Figma-style canvas with **layers and groups**. The human pans/zooms, leaves **pinned notes**, and sets status. Every iteration is **versioned**. An **MCP server** exposes the document and notes to the AI over stdio, so the AI reads feedback and pushes new versions programmatically. The two form a tight loop:
+Easle is a local desktop app for **AI-authored, human-reviewed** UI design. The AI builds designs as interactive HTML/CSS/JS "content" nodes, organized on an infinite canvas with **layers and groups**. The human pans/zooms, leaves **pinned notes**, and sets status. Every iteration is **versioned**. An **MCP server** exposes the document and notes to the AI over stdio, so the AI reads feedback and pushes new versions programmatically. The two form a tight loop:
 
 > AI authors → human reviews & annotates → AI reads notes via MCP → AI revises (new version) → repeat.
 
@@ -16,7 +16,7 @@ The tool is **general-purpose** (any design), not tied to any specific app.
 ## 2. Principles & non-goals (v1)
 
 - **AI authors, human reviews.** In v1 only the AI creates/edits content nodes (via MCP). A user-authoring toolbar is planned but out of scope now.
-- **Not a vector editor.** No pen/shape/text primitive drawing tools. Leaf designs are authored as **HTML/CSS/JS**; the tool provides Figma-style *organization, annotation, and versioning* over them.
+- **Not a vector editor.** No pen/shape/text primitive drawing tools. Leaf designs are authored as **HTML/CSS/JS**; the tool provides *organization, annotation, and versioning* over them.
 - **Local-only.** No cloud, no accounts. Electron window + local SQLite + local MCP over stdio.
 - **App UI in React.** The tool chrome (canvas, layers panel, notes, version bar) is **React + Vite + TypeScript** inside Electron. This is separate from the design *content*, which stays HTML/CSS/JS.
 - **Interactive designs.** Content nodes can include JS, so designs are live, not screenshots.
@@ -89,7 +89,7 @@ CREATE TABLE documents (
   created_at TEXT NOT NULL, updated_at TEXT NOT NULL
 );
 
--- Figma-like node tree. type: 'frame' | 'group' | 'content'
+-- node tree. type: 'frame' | 'group' | 'content'
 CREATE TABLE nodes (
   id INTEGER PRIMARY KEY,
   document_id INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
@@ -173,7 +173,7 @@ Tools (thin wrappers over the localhost API):
 | `update_node(id, {name?,x?,y?,w?,h?,z?,visible?,locked?,parentId?})` | edit node |
 | `set_content(id, {html?,css?,js?})` | author/replace a content node's design |
 | `delete_node(id)` | remove node (+subtree) |
-| `group_nodes({nodeIds, name?})` / `ungroup(groupId)` | Figma-style grouping |
+| `group_nodes({nodeIds, name?})` / `ungroup(groupId)` | grouping |
 | `list_notes({status?, documentId?})` | read feedback (default: open) |
 | `resolve_note(id, {resolution})` | mark resolved/wontfix |
 | `add_version({documentId, summary})` | snapshot current state |

@@ -30,6 +30,7 @@ function mapDocument(row) {
     id: row.id,
     name: row.name,
     projectId: row.project_id === null || row.project_id === undefined ? null : row.project_id,
+    reviewState: row.review_state != null ? row.review_state : 'idle',
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -114,7 +115,7 @@ function runSchemaAndSeed(db) {
       .run('Demo', projectId, ts, ts);
     const documentId = docInfo.lastInsertRowid;
 
-    // one Figma-style page for the seed frame to live under
+    // one page for the seed frame to live under
     const pageInfo = raw
       .prepare('INSERT INTO pages (document_id, name, idx, created_at, updated_at) VALUES (?,?,?,?,?)')
       .run(documentId, 'Page 1', 0, ts, ts);
@@ -196,7 +197,7 @@ function openDb(dbPath, opts = {}) {
     }
   })();
 
-  // -- migration: pages (Figma-style pages that group top-level frames) -------
+  // -- migration: pages (pages that group top-level frames) -------
   (function migratePages() {
     database.exec(`CREATE TABLE IF NOT EXISTS pages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -229,6 +230,14 @@ function openDb(dbPath, opts = {}) {
           .prepare('UPDATE nodes SET page_id = ? WHERE document_id = ? AND parent_id IS NULL AND page_id IS NULL')
           .run(first.id, d.id);
       }
+    }
+  })();
+
+  // -- migration: review_state (in-app review loop) --------------------------
+  (function migrateReview() {
+    const cols = database.prepare('PRAGMA table_info(documents)').all().map((c) => c.name);
+    if (!cols.includes('review_state')) {
+      database.exec("ALTER TABLE documents ADD COLUMN review_state TEXT NOT NULL DEFAULT 'idle'");
     }
   })();
 
@@ -876,6 +885,56 @@ function openDb(dbPath, opts = {}) {
     return { ok: true };
   }
 
+  // -- review loop ----------------------------------------------------------
+  // documents.review_state: idle | awaiting | changes_requested | approved.
+  // The AI sets 'awaiting' (requestReview, usually batched with addVersion), the
+  // user sets 'changes_requested'/'approved' from the app, and the AI's
+  // wait_for_review MCP tool consumes the signal (back to 'idle') when it wakes.
+
+  const REVIEW_STATES = ['idle', 'awaiting', 'changes_requested', 'approved'];
+
+  function getReviewState(documentId) {
+    if (!documentId) throw new Error('getReviewState: documentId is required');
+    const row = database.prepare('SELECT review_state FROM documents WHERE id = ?').get(documentId);
+    if (!row) throw new Error(`Document ${documentId} not found`);
+    return { documentId, state: row.review_state != null ? row.review_state : 'idle' };
+  }
+
+  function setReviewState(documentId, state) {
+    if (!documentId) throw new Error('setReviewState: documentId is required');
+    if (!REVIEW_STATES.includes(state)) throw new Error(`Invalid review state "${state}"`);
+    const row = database.prepare('SELECT id FROM documents WHERE id = ?').get(documentId);
+    if (!row) throw new Error(`Document ${documentId} not found`);
+    database.prepare('UPDATE documents SET review_state = ?, updated_at = ? WHERE id = ?')
+      .run(state, now(), documentId);
+    emitChanged();
+    return { ok: true, state };
+  }
+
+  function requestReview(documentId) { return setReviewState(documentId, 'awaiting'); }
+  function submitReview(documentId) { return setReviewState(documentId, 'changes_requested'); }
+  function approveReview(documentId) { return setReviewState(documentId, 'approved'); }
+
+  // Atomically read the review state and, if the user has acted, reset to 'idle'
+  // and report the prior state. Called by wait_for_review when it wakes.
+  function consumeReview(documentId) {
+    if (!documentId) throw new Error('consumeReview: documentId is required');
+    let prior;
+    const tx = database.transaction(() => {
+      const row = database.prepare('SELECT review_state FROM documents WHERE id = ?').get(documentId);
+      if (!row) throw new Error(`Document ${documentId} not found`);
+      prior = row.review_state != null ? row.review_state : 'idle';
+      if (prior === 'changes_requested' || prior === 'approved') {
+        database.prepare('UPDATE documents SET review_state = ?, updated_at = ? WHERE id = ?')
+          .run('idle', now(), documentId);
+      }
+    });
+    tx();
+    const consumed = prior === 'changes_requested' || prior === 'approved';
+    if (consumed) emitChanged();
+    return { state: prior, consumed };
+  }
+
   // -- pages ----------------------------------------------------------------
 
   function listPages(documentId) {
@@ -1080,6 +1139,10 @@ function openDb(dbPath, opts = {}) {
         }
         case 'restoreVersion':
           return restoreVersion(op.id);
+        case 'requestReview': {
+          const documentId = idOf(op, 'documentId', 'documentRef');
+          return requestReview(documentId);
+        }
 
         default:
           throw new Error(`applyOps: unknown op "${op.op}"`);
@@ -1140,6 +1203,12 @@ function openDb(dbPath, opts = {}) {
     listVersions,
     getVersion,
     restoreVersion,
+    // review loop
+    getReviewState,
+    requestReview,
+    submitReview,
+    approveReview,
+    consumeReview,
     // batch
     applyOps,
     // escape hatch for tests/tools

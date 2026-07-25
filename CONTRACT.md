@@ -6,7 +6,7 @@ Modules are built against this contract. Do not deviate from names/shapes.
 
 ```
 Project  = { id, name, createdAt, updatedAt }              // listProjects adds documentCount
-Document = { id, name, projectId|null, createdAt, updatedAt }
+Document = { id, name, projectId|null, reviewState:'idle'|'awaiting'|'changes_requested'|'approved', createdAt, updatedAt }
 Node = { id, documentId, parentId|null, pageId|null, type:'frame'|'group'|'content',
          name, x, y, w, h, z, visible:boolean, locked:boolean,
          createdAt, updatedAt, content?: { html, css, js } }   // content only on type==='content'
@@ -44,6 +44,11 @@ saveVersion({documentId,summary,author?}): Version                 // snapshot c
 listVersions(documentId): Version[]
 getVersion(id): Version & { snapshot:string }
 restoreVersion(id): { ok:true }                                    // replace live nodes/contents from snapshot
+getReviewState(documentId): { documentId, state }                 // idle|awaiting|changes_requested|approved
+requestReview(documentId): { ok:true, state:'awaiting' }          // AI parks the doc for user review
+submitReview(documentId): { ok:true, state:'changes_requested' }  // user pressed "Submit review"
+approveReview(documentId): { ok:true, state:'approved' }          // user pressed "Approve & continue"
+consumeReview(documentId): { state, consumed }                    // reset to idle if user acted; report prior state
 applyOps(ops): { refs:{ [ref]:id }, results:[...] }                // batch — see "applyOps" below
 ```
 
@@ -85,6 +90,7 @@ createNote      { documentId?|documentRef?, nodeId?, x, y, body, author? }  // d
 resolveNote     { id, resolution?:'resolved'|'wontfix' }
 addVersion      { documentId?|documentRef?, summary }                       // author 'ai'
 restoreVersion  { id }
+requestReview   { documentId?|documentRef? }                               // park doc 'awaiting' for in-app user review
 ```
 
 ## Preload IPC (apps/desktop/electron/preload.js) — renderer uses `window.easle`
@@ -145,7 +151,14 @@ get_node {id}              -> db.getNode(id)
 list_notes {documentId?,status?} -> db.listNotes (default status='open', first document)
 list_versions {documentId?}-> db.listVersions (default first document)
 get_version {id}           -> db.getVersion(id)
+get_review_state {documentId?} -> db.getReviewState (default first document)
+wait_for_review {documentId?,timeoutMs?} -> long-poll (~25s) the review loop
 ```
+`wait_for_review` returns `{status:'pending'}` (call again), `{status:'changes_requested',notes,latestVersion}`,
+or `{status:'approved',notes}`; it consumes the signal (resets to idle) when the user acts. `notes` are the open
+user notes. The AI's loop: `apply([…changes, addVersion, requestReview])` → `wait_for_review` until not pending →
+revise + resolveNote + addVersion + requestReview → repeat until approved.
+
 Individual mutation tools are intentionally NOT exposed — `apply` is the only write path.
 
 Consumer `.mcp.json`: `{ "mcpServers": { "easle": { "type":"http", "url":"http://127.0.0.1:47600/mcp" } } }`.

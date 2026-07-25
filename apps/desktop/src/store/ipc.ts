@@ -4,12 +4,13 @@
 // for UI work), window.easle is undefined. We provide a small in-memory mock so
 // the tool chrome still renders and is inspectable. In Electron this is never used.
 
-import type { CanvasApi, CanvasNode, Note, Version, Tree } from './types';
+import type { CanvasApi, CanvasNode, Note, Version, Tree, ReviewState } from './types';
 
 function buildMock(): CanvasApi {
   const now = () => new Date().toISOString();
   const project = { id: 1, name: 'Demo (mock)', createdAt: now(), updatedAt: now() };
-  const doc = { id: 1, name: 'Demo (mock)', projectId: 1, createdAt: now(), updatedAt: now() };
+  const doc: { id: number; name: string; projectId: number; reviewState: ReviewState; createdAt: string; updatedAt: string } =
+    { id: 1, name: 'Demo (mock)', projectId: 1, reviewState: 'idle', createdAt: now(), updatedAt: now() };
   let nid = 100;
   let noteId = 100;
   let verId = 100;
@@ -122,6 +123,16 @@ function buildMock(): CanvasApi {
       return { ...v, snapshot: JSON.stringify({ nodes }) };
     },
     async restoreVersion() { emit(); return { ok: true }; },
+    async getReviewState() { return { documentId: doc.id, state: doc.reviewState }; },
+    async requestReview() { doc.reviewState = 'awaiting'; emit(); return { ok: true, state: doc.reviewState }; },
+    async submitReview() { doc.reviewState = 'changes_requested'; emit(); return { ok: true, state: doc.reviewState }; },
+    async approveReview() { doc.reviewState = 'approved'; emit(); return { ok: true, state: doc.reviewState }; },
+    async consumeReview() {
+      const prior = doc.reviewState;
+      const consumed = prior === 'changes_requested' || prior === 'approved';
+      if (consumed) { doc.reviewState = 'idle'; emit(); }
+      return { state: prior, consumed };
+    },
     async applyOps() { emit(); return { refs: {}, results: [] }; },
     async listPages() { return [{ id: 1, documentId: 1, name: 'Page 1', idx: 0 }]; },
     async createPage(input) { return { id: 2, documentId: input.documentId, name: input.name ?? 'Page', idx: 1 }; },

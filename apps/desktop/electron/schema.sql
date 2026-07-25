@@ -14,13 +14,15 @@ CREATE TABLE IF NOT EXISTS documents (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
   project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+  -- in-app review loop: idle | awaiting | changes_requested | approved
+  review_state TEXT NOT NULL DEFAULT 'idle',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
 -- idx_documents_project is created in db.js's migrateProjects() (after the
 -- project_id column is guaranteed to exist on pre-existing dbs).
 
--- Figma-like node tree. type: 'frame' | 'group' | 'content'
+-- node tree. type: 'frame' | 'group' | 'content'
 CREATE TABLE IF NOT EXISTS nodes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   document_id INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,

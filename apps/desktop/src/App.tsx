@@ -4,6 +4,7 @@ import { Canvas } from './canvas/Canvas';
 import { LayersPanel } from './panels/LayersPanel';
 import { NotesPanel } from './panels/NotesPanel';
 import { VersionBar } from './panels/VersionBar';
+import { ReviewBar } from './panels/ReviewBar';
 import { PagesBar } from './panels/PagesBar';
 import { ModalHost } from './components/ModalHost';
 import './styles/app.css';
@@ -23,6 +24,7 @@ export default function App() {
   return (
     <div className="app-shell">
       <VersionBar />
+      <ReviewBar />
       <div className="app-main">
         <LayersPanel />
         <div className="app-center">

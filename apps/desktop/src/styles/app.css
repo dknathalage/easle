@@ -248,3 +248,28 @@ button { font: inherit; cursor: pointer; }
 .page-add { flex: 0 0 auto; width: 28px; height: 28px; border-radius: 8px;
   border: 1px dashed var(--border-strong); background: transparent; color: var(--text-dim); cursor: pointer; font-size: 14px; }
 .page-add:hover { color: var(--text); border-color: var(--text-dim); }
+
+/* ---------------- review bar (AI parked on wait_for_review) ---------------- */
+.review-bar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 14px; background: var(--ai-soft); border-bottom: 1px solid var(--border);
+  color: var(--text); font-size: 13px;
+}
+.review-bar-dot {
+  flex: 0 0 auto; width: 9px; height: 9px; border-radius: 50%; background: var(--ai);
+  box-shadow: 0 0 0 0 rgba(139, 92, 246, .5); animation: review-pulse 1.6s ease-out infinite;
+}
+@keyframes review-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(139, 92, 246, .5); }
+  70% { box-shadow: 0 0 0 8px rgba(139, 92, 246, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0); }
+}
+.review-bar-msg { flex: 1 1 auto; color: var(--text); }
+.review-bar-actions { flex: 0 0 auto; display: flex; gap: 8px; }
+.review-submit, .review-approve {
+  border-radius: 6px; padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.review-submit { border: 1px solid var(--ai); background: #fff; color: var(--ai); }
+.review-submit:disabled { opacity: .5; cursor: not-allowed; }
+.review-approve { border: 1px solid var(--user); background: var(--user); color: #fff; }
+.review-approve:hover { filter: brightness(.96); }

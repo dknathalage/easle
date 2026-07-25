@@ -64,10 +64,14 @@ export interface Project {
   documentCount?: number; // present on listProjects
 }
 
+// In-app review loop state for a document.
+export type ReviewState = 'idle' | 'awaiting' | 'changes_requested' | 'approved';
+
 export interface CanvasDocument {
   id: number;
   name: string;
   projectId?: number | null;
+  reviewState?: ReviewState;
   createdAt: string;
   updatedAt: string;
 }
@@ -124,6 +128,12 @@ export interface CanvasApi {
   listVersions(documentId: number): Promise<Version[]>;
   getVersion(id: number): Promise<Version & { snapshot: string }>;
   restoreVersion(id: number): Promise<{ ok: true }>;
+  // review loop
+  getReviewState(documentId: number): Promise<{ documentId: number; state: ReviewState }>;
+  requestReview(documentId: number): Promise<{ ok: true; state: ReviewState }>;
+  submitReview(documentId: number): Promise<{ ok: true; state: ReviewState }>;
+  approveReview(documentId: number): Promise<{ ok: true; state: ReviewState }>;
+  consumeReview(documentId: number): Promise<{ state: ReviewState; consumed: boolean }>;
   // batch-first mutation: an array of ops in one atomic transaction.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   applyOps(ops: any[]): Promise<{ refs: Record<string, number>; results: any[] }>;

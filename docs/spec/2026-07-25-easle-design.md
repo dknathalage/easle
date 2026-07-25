@@ -3,7 +3,7 @@
 **Date:** 2026-07-25
 **Status:** approved (design), ready for implementation plan
 
-Easle is a local, Figma-style **AI-authored / human-reviewed** design-iteration
+Easle is a local, infinite-canvas **AI-authored / human-reviewed** design-iteration
 tool. The AI builds interactive HTML/CSS/JS designs as nodes on an infinite
 canvas; the human pans/zooms, pins notes, and sets status; every iteration is
 versioned. This spec covers four changes that take the tool from its origin as
@@ -56,7 +56,7 @@ Project → Document → Page → Node (frame | group | component)
 - **Project** — new top-level entity. Groups many documents. This is what lets
   one Easle install hold designs for several apps/features at once.
 - **Document** — unchanged, gains `project_id`.
-- **Page** — unchanged (Figma-style page grouping top-level frames).
+- **Page** — unchanged (page grouping top-level frames).
 - **Node** — unchanged shapes. A **`content` node is addressed as a
   "component"** in the MCP vocabulary (its html/css/js is the design). `frame`
   and `group` remain layout containers.

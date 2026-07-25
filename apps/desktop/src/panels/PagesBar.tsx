@@ -1,7 +1,7 @@
 import { useStore } from '../store/store';
 import { getCanvas } from '../store/ipc';
 
-// Figma-style page tabs. Switching a page filters the canvas + Layers to that
+// Page tabs. Switching a page filters the canvas + Layers to that
 // page's frames and fits them into view.
 export function PagesBar() {
   const pages = useStore((s) => s.pages);

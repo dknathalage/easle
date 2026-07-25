@@ -1,0 +1,11 @@
+{
+  "name": "easle",
+  "description": "Author and iterate on UI designs in the Easle app via its MCP server, with an in-app review loop that parks the agent until the user submits notes or approves.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Dinuka Nathalage",
+    "email": "dknathalage@gmail.com"
+  },
+  "homepage": "https://github.com/dknathalage/easle",
+  "license": "Apache-2.0"
+}
