@@ -4,6 +4,8 @@
   "private": true,
   "description": "Easle desktop app — local AI-authored / human-reviewed design-iteration tool",
   "author": "dknathalage <dknathalage@gmail.com>",
+  "homepage": "https://github.com/dknathalage/easle",
+  "license": "Apache-2.0",
   "main": "electron/main.js",
   "scripts": {
     "dev:vite": "vite",
@@ -20,6 +22,7 @@
     "appId": "com.dknathalage.easle",
     "productName": "Easle",
     "electronVersion": "32.3.3",
+    "artifactName": "${productName}-${version}-${arch}.${ext}",
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -53,6 +56,7 @@
       ]
     },
     "linux": {
+      "executableName": "easle",
       "category": "Development",
       "target": [
         "AppImage",
