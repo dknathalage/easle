@@ -5,6 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 const Database = require('better-sqlite3');
+const { compileJsx } = require('./compile.js');
 
 // Schema lives beside this file (vendored — no external workspace package, so
 // electron-builder can package the app). fs reads this correctly inside app.asar.
@@ -59,7 +60,13 @@ function mapNode(row) {
 
 function mapContent(row) {
   if (!row) return null;
-  return { html: row.html, css: row.css, js: row.js };
+  return {
+    html: row.html,
+    css: row.css,
+    js: row.js,
+    source: row.source ?? null,
+    compiled: row.compiled ?? null,
+  };
 }
 
 function mapNote(row) {
@@ -76,6 +83,20 @@ function mapNote(row) {
     parentId: row.parent_id === null || row.parent_id === undefined ? null : row.parent_id,
     createdAt: row.created_at,
     resolvedAt: row.resolved_at === undefined ? null : row.resolved_at,
+  };
+}
+
+function mapComponent(r) {
+  if (!r) return null;
+  return {
+    id: r.id,
+    documentId: r.document_id,
+    name: r.name,
+    source: r.source,
+    compiled: r.compiled,
+    css: r.css,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
   };
 }
 
@@ -241,6 +262,14 @@ function openDb(dbPath, opts = {}) {
     }
   })();
 
+  // -- migration: components (React source/compiled on contents + new tables) --
+  (function migrateComponents() {
+    const cols = database.prepare('PRAGMA table_info(contents)').all().map((c) => c.name);
+    if (!cols.includes('source')) database.exec('ALTER TABLE contents ADD COLUMN source TEXT');
+    if (!cols.includes('compiled')) database.exec('ALTER TABLE contents ADD COLUMN compiled TEXT');
+    // components + document_assets tables come from schema.sql (IF NOT EXISTS, run on open)
+  })();
+
   let onChanged = typeof opts.onChanged === 'function' ? opts.onChanged : () => {};
   const emitChanged = () => {
     try {
@@ -355,7 +384,7 @@ function openDb(dbPath, opts = {}) {
     return mapDocument(database.prepare('SELECT * FROM documents WHERE id = ?').get(documentId));
   }
 
-  function getTree(documentId) {
+  function getTree(documentId, { includeContent = true } = {}) {
     const document = mapDocument(
       database.prepare('SELECT * FROM documents WHERE id = ?').get(documentId)
     );
@@ -367,7 +396,12 @@ function openDb(dbPath, opts = {}) {
     const nodes = rows.map((row) => {
       const node = mapNode(row);
       if (node.type === 'content') {
-        node.content = mapContent(getContentRow(node.id)) || { html: '', css: '', js: '' };
+        const c = mapContent(getContentRow(node.id)) || { html: '', css: '', js: '' };
+        if (includeContent) {
+          node.content = c;
+        } else {
+          node.contentBytes = Buffer.byteLength((c.html || '') + (c.css || '') + (c.js || ''));
+        }
       }
       return node;
     });
@@ -483,12 +517,15 @@ function openDb(dbPath, opts = {}) {
     return { ok: true };
   }
 
-  function setContent(id, { html, css, js } = {}) {
+  function setContent(id, { html, css, js, source } = {}) {
     const row = getNodeRow(id);
     if (!row) throw new Error(`Node ${id} not found`);
     if (row.type !== 'content')
       throw new Error(`Node ${id} is not a content node`);
     const ts = now();
+    // Compile before the transaction so a throw aborts cleanly (still inside the
+    // outer applyOps tx → the whole batch rolls back).
+    const compiled = source != null ? compileJsx(source, { filename: `node-${id}.jsx` }).code : null;
     const tx = database.transaction(() => {
       let existing = getContentRow(id);
       if (!existing) {
@@ -500,15 +537,45 @@ function openDb(dbPath, opts = {}) {
       const nextHtml = html != null ? html : existing.html;
       const nextCss = css != null ? css : existing.css;
       const nextJs = js != null ? js : existing.js;
+      const nextSource = source != null ? source : existing.source;
+      const nextCompiled = source != null ? compiled : existing.compiled;
       database
-        .prepare('UPDATE contents SET html = ?, css = ?, js = ?, updated_at = ? WHERE node_id = ?')
-        .run(nextHtml, nextCss, nextJs, ts, id);
+        .prepare('UPDATE contents SET html = ?, css = ?, js = ?, source = ?, compiled = ?, updated_at = ? WHERE node_id = ?')
+        .run(nextHtml, nextCss, nextJs, nextSource, nextCompiled, ts, id);
       database.prepare('UPDATE nodes SET updated_at = ? WHERE id = ?').run(ts, id);
       touchDocument(row.document_id, ts);
     });
     tx();
     emitChanged();
     return { ok: true };
+  }
+
+  function patchContent(id, { edits = [], append = {} } = {}) {
+    const row = getNodeRow(id);
+    if (!row) throw new Error(`Node ${id} not found`);
+    if (row.type !== 'content') throw new Error(`Node ${id} is not a content node`);
+    const existing = getContentRow(id) || { html: '', css: '', js: '' };
+    const next = { html: existing.html || '', css: existing.css || '', js: existing.js || '' };
+
+    for (const edit of edits) {
+      const field = edit.field;
+      if (!['html', 'css', 'js'].includes(field)) {
+        throw new Error(`patchContent: bad field "${field}"`);
+      }
+      const src = next[field];
+      const parts = src.split(edit.find);
+      const count = parts.length - 1;
+      if (count === 0) throw new Error(`patchContent: find not found in ${field}: ${JSON.stringify(edit.find)}`);
+      if (count > 1 && !edit.all) {
+        throw new Error(`patchContent: find matched ${count} times in ${field} (not unique); pass all:true to replace all`);
+      }
+      next[field] = edit.all ? parts.join(edit.replace) : src.replace(edit.find, edit.replace);
+    }
+    for (const field of ['html', 'css', 'js']) {
+      if (append[field] != null) next[field] = next[field] + append[field];
+    }
+    // reuse setContent's write path (handles updated_at + touchDocument + content upsert)
+    return setContent(id, next);
   }
 
   // -- grouping -------------------------------------------------------------
@@ -712,6 +779,90 @@ function openDb(dbPath, opts = {}) {
     return mapNote(database.prepare('SELECT * FROM notes WHERE id = ?').get(id));
   }
 
+  // -- components (reusable React components, scoped to a document) ----------
+
+  function getComponentRow(id) {
+    return database.prepare('SELECT * FROM components WHERE id = ?').get(id);
+  }
+  function listComponents(documentId) {
+    if (!documentId) throw new Error('listComponents: documentId is required');
+    return database
+      .prepare('SELECT * FROM components WHERE document_id = ? ORDER BY name ASC')
+      .all(documentId)
+      .map(mapComponent);
+  }
+  function createComponent({ documentId, name, source, css } = {}) {
+    if (!documentId) throw new Error('createComponent: documentId is required');
+    if (!name) throw new Error('createComponent: name is required');
+    if (source == null) throw new Error('createComponent: source is required');
+    const compiled = compileJsx(source, { filename: `component-${name}.jsx` }).code;
+    const ts = now();
+    const info = database
+      .prepare('INSERT INTO components (document_id, name, source, compiled, css, created_at, updated_at) VALUES (?,?,?,?,?,?,?)')
+      .run(documentId, name, source, compiled, css != null ? css : '', ts, ts);
+    touchDocument(documentId, ts);
+    emitChanged();
+    return mapComponent(getComponentRow(info.lastInsertRowid));
+  }
+  function updateComponent(id, patch = {}) {
+    const row = getComponentRow(id);
+    if (!row) throw new Error(`Component ${id} not found`);
+    const ts = now();
+    const nextSource = 'source' in patch ? patch.source : row.source;
+    const nextCompiled = 'source' in patch ? compileJsx(nextSource, { filename: `component-${id}.jsx` }).code : row.compiled;
+    const nextName = 'name' in patch ? patch.name : row.name;
+    const nextCss = 'css' in patch ? patch.css : row.css;
+    database
+      .prepare('UPDATE components SET name=?, source=?, compiled=?, css=?, updated_at=? WHERE id=?')
+      .run(nextName, nextSource, nextCompiled, nextCss, ts, id);
+    touchDocument(row.document_id, ts);
+    emitChanged();
+    return mapComponent(getComponentRow(id));
+  }
+  function patchComponent(id, { edits = [], append = {} } = {}) {
+    const row = getComponentRow(id);
+    if (!row) throw new Error(`Component ${id} not found`);
+    const next = { source: row.source || '', css: row.css || '' };
+    for (const edit of edits) {
+      if (!['source', 'css'].includes(edit.field)) throw new Error(`patchComponent: bad field "${edit.field}"`);
+      const src = next[edit.field];
+      const count = src.split(edit.find).length - 1;
+      if (count === 0) throw new Error(`patchComponent: find not found in ${edit.field}`);
+      if (count > 1 && !edit.all) throw new Error(`patchComponent: find matched ${count} times in ${edit.field}; pass all:true`);
+      next[edit.field] = edit.all ? src.split(edit.find).join(edit.replace) : src.replace(edit.find, edit.replace);
+    }
+    if (append.source != null) next.source += append.source;
+    if (append.css != null) next.css += append.css;
+    return updateComponent(id, { source: next.source, css: next.css });
+  }
+  function deleteComponent(id) {
+    const row = getComponentRow(id);
+    if (!row) throw new Error(`Component ${id} not found`);
+    database.prepare('DELETE FROM components WHERE id = ?').run(id);
+    touchDocument(row.document_id, now());
+    emitChanged();
+    return { ok: true };
+  }
+
+  // -- document assets (shared css/js, blank slate by default) --------------
+
+  function getDocumentAssets(documentId) {
+    const r = database.prepare('SELECT css, js FROM document_assets WHERE document_id = ?').get(documentId);
+    return r ? { css: r.css || '', js: r.js || '' } : { css: '', js: '' };
+  }
+  function setDocumentAssets({ documentId, css, js } = {}) {
+    if (!documentId) throw new Error('setDocumentAssets: documentId is required');
+    const cur = getDocumentAssets(documentId);
+    const ts = now();
+    database.prepare(
+      `INSERT INTO document_assets (document_id, css, js, updated_at) VALUES (?,?,?,?)
+       ON CONFLICT(document_id) DO UPDATE SET css=excluded.css, js=excluded.js, updated_at=excluded.updated_at`
+    ).run(documentId, css != null ? css : cur.css, js != null ? js : cur.js, ts);
+    touchDocument(documentId, ts);
+    emitChanged();
+    return getDocumentAssets(documentId);
+  }
+
   // -- versions -------------------------------------------------------------
 
   function buildSnapshot(documentId) {
@@ -739,11 +890,15 @@ function openDb(dbPath, opts = {}) {
       if (n.type === 'content') {
         const c = getContentRow(n.id);
         contents[n.id] = c
-          ? { html: c.html, css: c.css, js: c.js }
-          : { html: '', css: '', js: '' };
+          ? { html: c.html, css: c.css, js: c.js, source: c.source ?? null, compiled: c.compiled ?? null }
+          : { html: '', css: '', js: '', source: null, compiled: null };
       }
     }
-    return JSON.stringify({ nodes, contents });
+    const components = database
+      .prepare('SELECT name, source, compiled, css FROM components WHERE document_id = ?')
+      .all(documentId);
+    const assets = getDocumentAssets(documentId);
+    return JSON.stringify({ nodes, contents, components, assets });
   }
 
   function saveVersion({ documentId, summary, author } = {}) {
@@ -842,8 +997,8 @@ function openDb(dbPath, opts = {}) {
           if (n.type === 'content') {
             const c = snapContents[n.id] || snapContents[String(n.id)] || { html: '', css: '', js: '' };
             database
-              .prepare('INSERT INTO contents (node_id, html, css, js, updated_at) VALUES (?,?,?,?,?)')
-              .run(newId, c.html || '', c.css || '', c.js || '', ts);
+              .prepare('INSERT INTO contents (node_id, html, css, js, source, compiled, updated_at) VALUES (?,?,?,?,?,?,?)')
+              .run(newId, c.html || '', c.css || '', c.js || '', c.source ?? null, c.compiled ?? null, ts);
           }
           remaining.splice(i, 1);
         }
@@ -874,10 +1029,25 @@ function openDb(dbPath, opts = {}) {
         if (n.type === 'content') {
           const c = snapContents[n.id] || snapContents[String(n.id)] || { html: '', css: '', js: '' };
           database
-            .prepare('INSERT INTO contents (node_id, html, css, js, updated_at) VALUES (?,?,?,?,?)')
-            .run(newId, c.html || '', c.css || '', c.js || '', ts);
+            .prepare('INSERT INTO contents (node_id, html, css, js, source, compiled, updated_at) VALUES (?,?,?,?,?,?,?)')
+            .run(newId, c.html || '', c.css || '', c.js || '', c.source ?? null, c.compiled ?? null, ts);
         }
       }
+
+      // restore components + shared assets
+      database.prepare('DELETE FROM components WHERE document_id = ?').run(documentId);
+      for (const c of (snapshot.components || [])) {
+        database
+          .prepare('INSERT INTO components (document_id, name, source, compiled, css, created_at, updated_at) VALUES (?,?,?,?,?,?,?)')
+          .run(documentId, c.name, c.source, c.compiled, c.css || '', ts, ts);
+      }
+      if (snapshot.assets) {
+        database.prepare(
+          `INSERT INTO document_assets (document_id, css, js, updated_at) VALUES (?,?,?,?)
+           ON CONFLICT(document_id) DO UPDATE SET css=excluded.css, js=excluded.js, updated_at=excluded.updated_at`
+        ).run(documentId, snapshot.assets.css || '', snapshot.assets.js || '', ts);
+      }
+
       touchDocument(documentId, ts);
     });
     tx();
@@ -1083,7 +1253,31 @@ function openDb(dbPath, opts = {}) {
           return updateNode(targetId(op), op.patch || {});
         case 'setContent': {
           const id = targetId(op);
-          return setContent(id, { html: op.html, css: op.css, js: op.js });
+          return setContent(id, { html: op.html, css: op.css, js: op.js, source: op.source });
+        }
+        case 'patchContent': {
+          const id = targetId(op);
+          return patchContent(id, { edits: op.edits, append: op.append });
+        }
+
+        // ---- components ----
+        case 'createComponent': {
+          const documentId = idOf(op, 'documentId', 'documentRef');
+          const c = createComponent({ documentId, name: op.name, source: op.source, css: op.css });
+          record(op, c.id);
+          return c;
+        }
+        case 'updateComponent':
+          return updateComponent(targetId(op), op.patch || {});
+        case 'patchComponent':
+          return patchComponent(targetId(op), { edits: op.edits, append: op.append });
+        case 'deleteComponent':
+          return deleteComponent(targetId(op));
+
+        // ---- document assets ----
+        case 'setDocumentAssets': {
+          const documentId = idOf(op, 'documentId', 'documentRef');
+          return setDocumentAssets({ documentId, css: op.css, js: op.js });
         }
 
         // ---- structure / lifecycle ----
@@ -1094,6 +1288,10 @@ function openDb(dbPath, opts = {}) {
           const patch = {};
           if (parentId !== undefined) patch.parentId = parentId;
           if (op.z != null) patch.z = op.z;
+          if (op.x != null) patch.x = op.x;
+          if (op.y != null) patch.y = op.y;
+          if (op.w != null) patch.w = op.w;
+          if (op.h != null) patch.h = op.h;
           if (Object.keys(patch).length) updateNode(id, patch);
           if (pageId !== undefined) setNodePage(id, pageId);
           return getNode(id);
@@ -1191,8 +1389,18 @@ function openDb(dbPath, opts = {}) {
     updateNode,
     deleteNode,
     setContent,
+    patchContent,
     groupNodes,
     ungroup,
+    // components
+    listComponents,
+    createComponent,
+    updateComponent,
+    patchComponent,
+    deleteComponent,
+    // document assets
+    getDocumentAssets,
+    setDocumentAssets,
     // notes
     listNotes,
     createNote,

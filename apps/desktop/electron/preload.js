@@ -39,6 +39,8 @@ const METHODS = [
   'submitReview',
   'approveReview',
   'consumeReview',
+  'getDocumentAssets',
+  'listComponents',
   'applyOps',
 ];
 

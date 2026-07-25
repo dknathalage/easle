@@ -43,6 +43,8 @@ const DB_METHODS = [
   'submitReview',
   'approveReview',
   'consumeReview',
+  'getDocumentAssets',
+  'listComponents',
   'applyOps',
 ];
 

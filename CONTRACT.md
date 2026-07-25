@@ -9,7 +9,8 @@ Project  = { id, name, createdAt, updatedAt }              // listProjects adds 
 Document = { id, name, projectId|null, reviewState:'idle'|'awaiting'|'changes_requested'|'approved', createdAt, updatedAt }
 Node = { id, documentId, parentId|null, pageId|null, type:'frame'|'group'|'content',
          name, x, y, w, h, z, visible:boolean, locked:boolean,
-         createdAt, updatedAt, content?: { html, css, js } }   // content only on type==='content'
+         createdAt, updatedAt, content?: { html, css, js, source, compiled }, contentBytes?:number }   // content only on type==='content'; source/compiled null for legacy html/css/js nodes; contentBytes present on lean get_tree instead of content
+Component = { id, documentId, name, source, compiled, css, createdAt, updatedAt }   // reusable per-document React component
 Note = { id, documentId, nodeId|null, x, y, body, author:'user'|'ai',
          status:'open'|'resolved'|'wontfix', parentId|null, createdAt, resolvedAt|null }
 Version = { id, documentId, n, author:'ai'|'user', summary, createdAt }   // list omits snapshot; getVersion adds snapshot(JSON string)
@@ -76,9 +77,16 @@ updateProject   { id|ref, patch:{name?} }
 updateDocument  { id|ref, patch:{name?, projectId?} }
 updatePage      { id|ref, patch:{name?, idx?} }
 updateNode      { id|ref, patch:{name?,x?,y?,w?,h?,z?,visible?,locked?,parentId?} }
-setContent      { id|ref, html?, css?, js? }
+setContent      { id|ref, html?, css?, js?, source? }   // source = React/JSX; compiled once at write time
+patchContent    { id|ref, edits?:[{field:'html'|'css'|'js',find,replace,all?}], append?:{html?,css?,js?} }
+# react components + shared assets (per document)
+createComponent { ref?, documentId?|documentRef?, name, source, css? }        // reusable JSX component; compiled on write
+updateComponent { id|ref, patch:{name?, source?, css?} }                       // recompiles if source changes
+patchComponent  { id|ref, edits?:[{field:'source'|'css',find,replace,all?}], append?:{source?,css?} }  // recompiles
+deleteComponent { id|ref }
+setDocumentAssets { documentId?|documentRef?, css?, js? }                      // document-wide shared css/js
 # structure / lifecycle
-moveNode        { id|ref, parentId?|parentRef?, pageId?|pageRef?, z? }
+moveNode        { id|ref, parentId?|parentRef?, pageId?|pageRef?, x?, y?, w?, h?, z? }
 groupNodes      { ref?, nodeIds:[id|ref], name? }
 ungroup         { groupId }
 deleteNode      { id|ref }
@@ -148,6 +156,8 @@ list_projects              -> db.listProjects()
 get_project {id}           -> db.getProject(id)
 get_tree {documentId?}     -> db.getTree (default first document)
 get_node {id}              -> db.getNode(id)
+list_components {documentId?}    -> db.listComponents (default first document) — reusable React components
+get_document_assets {documentId?} -> db.getDocumentAssets (default first document) -> { css, js }
 list_notes {documentId?,status?} -> db.listNotes (default status='open', first document)
 list_versions {documentId?}-> db.listVersions (default first document)
 get_version {id}           -> db.getVersion(id)
