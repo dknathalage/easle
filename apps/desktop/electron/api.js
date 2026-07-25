@@ -4,6 +4,8 @@
 const http = require('http');
 const { URL } = require('url');
 const { API_HOST, API_PORT } = require('@easle/shared');
+const { StreamableHTTPServerTransport } = require('@modelcontextprotocol/sdk/server/streamableHttp.js');
+const { createMcpServer } = require('./mcp');
 
 function readJsonBody(req) {
   return new Promise((resolve, reject) => {
@@ -40,6 +42,34 @@ function sendJson(res, status, payload) {
   res.end(body);
 }
 
+// Handle an MCP request over the SDK's Streamable HTTP transport in stateless
+// mode: a fresh McpServer + transport per request, disposed when the response
+// closes. Simplest robust setup for a local single-user tool (no sessions).
+async function handleMcp(req, res, db) {
+  const method = req.method || 'GET';
+  // Only POST carries a JSON-RPC body; GET/DELETE have none.
+  let body;
+  if (method === 'POST') {
+    try {
+      body = await readJsonBody(req);
+    } catch (e) {
+      return sendJson(res, 400, {
+        jsonrpc: '2.0',
+        error: { code: -32700, message: 'Parse error: ' + (e && e.message ? e.message : 'invalid JSON') },
+        id: null,
+      });
+    }
+  }
+  const server = createMcpServer(db);
+  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+  res.on('close', () => {
+    try { transport.close(); } catch (_) { /* ignore */ }
+    try { server.close(); } catch (_) { /* ignore */ }
+  });
+  await server.connect(transport);
+  await transport.handleRequest(req, res, body);
+}
+
 function startApi(db) {
   const server = http.createServer(async (req, res) => {
     let parsed;
@@ -63,6 +93,11 @@ function startApi(db) {
     const seg = path.split('/').filter(Boolean); // e.g. ['node','5','content']
 
     try {
+      // ---- /mcp (embedded MCP server, Streamable HTTP) ------------------
+      if (path === '/mcp' && (method === 'POST' || method === 'GET' || method === 'DELETE')) {
+        return await handleMcp(req, res, db);
+      }
+
       // ---- GET /health --------------------------------------------------
       if (method === 'GET' && path === '/health') {
         return sendJson(res, 200, { ok: true });
