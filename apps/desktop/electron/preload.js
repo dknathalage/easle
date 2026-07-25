@@ -34,6 +34,7 @@ const METHODS = [
   'listVersions',
   'getVersion',
   'restoreVersion',
+  'applyOps',
 ];
 
 const easle = {};

@@ -23,19 +23,20 @@ The tool is **general-purpose** (any design), not tied to any specific app.
 
 ## 3. Architecture
 
-Three cooperating pieces, all local:
+All local, in one process (the MCP server is embedded — see the current spec):
 
 ```
-┌────────────────────────────┐        ┌──────────────────────────┐
-│ Electron app (apps/desktop)│        │ MCP server (packages/mcp)│
-│  main process              │        │  stdio ⇄ Claude Code     │
-│   • better-sqlite3 (owner) │        │  HTTP client ⇄ app API   │
-│   • DB layer (single owner)│        └───────────┬──────────────┘
-│   • IPC ⇄ renderer         │                    │ localhost JSON API
-│   • localhost JSON API ────┼────────────────────┘  (127.0.0.1:47600)
-│  preload (contextBridge)   │
-│  renderer (vanilla HTML/JS)│  ← pan/zoom canvas, layers panel, notes
-└────────────────────────────┘
+┌─────────────────────────────────────────────┐
+│ Electron app (apps/desktop)                  │
+│  main process                                │
+│   • better-sqlite3 (owner)                   │
+│   • DB layer (single owner)                  │
+│   • IPC ⇄ renderer                           │
+│   • localhost JSON API + /mcp  (127.0.0.1:47600)
+│       └─ embedded MCP server (Streamable HTTP) ⇄ Claude Code
+│  preload (contextBridge)                     │
+│  renderer (React)  ← pan/zoom canvas, layers panel, notes
+└─────────────────────────────────────────────┘
         │ SQLite file
         ▼
    data/canvas.db  (WAL)

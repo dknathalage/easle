@@ -124,6 +124,9 @@ export interface CanvasApi {
   listVersions(documentId: number): Promise<Version[]>;
   getVersion(id: number): Promise<Version & { snapshot: string }>;
   restoreVersion(id: number): Promise<{ ok: true }>;
+  // batch-first mutation: an array of ops in one atomic transaction.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  applyOps(ops: any[]): Promise<{ refs: Record<string, number>; results: any[] }>;
   onChanged(cb: () => void): () => void;
 }
 

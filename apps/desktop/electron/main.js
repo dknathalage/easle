@@ -38,6 +38,7 @@ const DB_METHODS = [
   'listVersions',
   'getVersion',
   'restoreVersion',
+  'applyOps',
 ];
 
 let db = null;

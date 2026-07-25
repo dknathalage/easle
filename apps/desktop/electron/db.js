@@ -907,6 +907,198 @@ function openDb(dbPath, opts = {}) {
     return { ok: true };
   }
 
+  // -- batch apply ----------------------------------------------------------
+
+  // applyOps runs an array of ops in ONE transaction with a shared ref->id map,
+  // dispatching each op to the internal helpers above. Any throw rolls back the
+  // whole batch. A single emitChanged() fires after commit (one live refresh).
+  //
+  // Temp refs: a create op may carry `ref: "<string>"`; later ops resolve it via
+  // projectRef / documentRef / pageRef / parentRef, or `ref` in an id position
+  // (update*/setContent/moveNode/deleteNode accept `ref` as well as `id`).
+  function applyOps(ops) {
+    if (!Array.isArray(ops)) throw new Error('applyOps: ops must be an array');
+
+    const refs = new Map(); // ref string -> real id
+    const resolveRef = (name) => {
+      if (!refs.has(name)) throw new Error(`applyOps: unresolved ref "${name}"`);
+      return refs.get(name);
+    };
+    // Resolve an id that may be given as a real id or a `*Ref` string field.
+    const idOf = (op, idKey, refKey) => {
+      if (op[idKey] != null) return op[idKey];
+      if (op[refKey] != null) return resolveRef(op[refKey]);
+      return undefined;
+    };
+    // Resolve the `id | ref` position used by update*/setContent/moveNode/deleteNode.
+    const targetId = (op) => {
+      if (op.id != null) return op.id;
+      if (op.ref != null) return resolveRef(op.ref);
+      throw new Error(`applyOps: op "${op.op}" requires id or ref`);
+    };
+    const record = (op, id) => {
+      if (op.ref != null) refs.set(op.ref, id);
+    };
+
+    const results = [];
+
+    const dispatch = (op) => {
+      if (!op || typeof op !== 'object' || typeof op.op !== 'string') {
+        throw new Error('applyOps: each op must be an object with a string "op"');
+      }
+      switch (op.op) {
+        // ---- create ----
+        case 'createProject': {
+          const p = createProject({ name: op.name });
+          record(op, p.id);
+          return p;
+        }
+        case 'createDocument': {
+          const projectId = idOf(op, 'projectId', 'projectRef');
+          const d = createDocument({ projectId, name: op.name });
+          record(op, d.id);
+          return d;
+        }
+        case 'createPage': {
+          const documentId = idOf(op, 'documentId', 'documentRef');
+          const p = createPage({ documentId, name: op.name, idx: op.idx });
+          record(op, p.id);
+          return p;
+        }
+        case 'createNode': {
+          const documentId = idOf(op, 'documentId', 'documentRef');
+          const parentId = idOf(op, 'parentId', 'parentRef');
+          const pageId = idOf(op, 'pageId', 'pageRef');
+          const n = createNode({
+            documentId,
+            parentId: parentId != null ? parentId : null,
+            pageId,
+            type: op.type,
+            name: op.name,
+            x: op.x, y: op.y, w: op.w, h: op.h, z: op.z,
+          });
+          record(op, n.id);
+          if (op.type === 'content' && op.content) {
+            setContent(n.id, op.content);
+          }
+          return getNode(n.id);
+        }
+
+        // ---- patch ----
+        case 'updateProject':
+          return updateProject(targetId(op), op.patch || {});
+        case 'updateDocument': {
+          const id = targetId(op);
+          const patch = op.patch || {};
+          const row = database.prepare('SELECT * FROM documents WHERE id = ?').get(id);
+          if (!row) throw new Error(`Document ${id} not found`);
+          const sets = [];
+          const values = [];
+          if ('name' in patch) { sets.push('name = ?'); values.push(patch.name); }
+          if ('projectId' in patch) { sets.push('project_id = ?'); values.push(patch.projectId); }
+          if (sets.length) {
+            sets.push('updated_at = ?'); values.push(now());
+            database.prepare(`UPDATE documents SET ${sets.join(', ')} WHERE id = ?`).run(...values, id);
+          }
+          return mapDocument(database.prepare('SELECT * FROM documents WHERE id = ?').get(id));
+        }
+        case 'updatePage': {
+          const id = targetId(op);
+          const patch = op.patch || {};
+          const row = database.prepare('SELECT * FROM pages WHERE id = ?').get(id);
+          if (!row) throw new Error(`Page ${id} not found`);
+          const sets = [];
+          const values = [];
+          if ('name' in patch) { sets.push('name = ?'); values.push(patch.name); }
+          if ('idx' in patch) { sets.push('idx = ?'); values.push(patch.idx); }
+          if (sets.length) {
+            sets.push('updated_at = ?'); values.push(now());
+            database.prepare(`UPDATE pages SET ${sets.join(', ')} WHERE id = ?`).run(...values, id);
+          }
+          return { ok: true };
+        }
+        case 'updateNode':
+          return updateNode(targetId(op), op.patch || {});
+        case 'setContent': {
+          const id = targetId(op);
+          return setContent(id, { html: op.html, css: op.css, js: op.js });
+        }
+
+        // ---- structure / lifecycle ----
+        case 'moveNode': {
+          const id = targetId(op);
+          const parentId = idOf(op, 'parentId', 'parentRef');
+          const pageId = idOf(op, 'pageId', 'pageRef');
+          const patch = {};
+          if (parentId !== undefined) patch.parentId = parentId;
+          if (op.z != null) patch.z = op.z;
+          if (Object.keys(patch).length) updateNode(id, patch);
+          if (pageId !== undefined) setNodePage(id, pageId);
+          return getNode(id);
+        }
+        case 'groupNodes': {
+          const nodeIds = (op.nodeIds || []).map((n) =>
+            typeof n === 'string' ? resolveRef(n) : n
+          );
+          const g = groupNodes({ nodeIds, name: op.name });
+          record(op, g.id);
+          return g;
+        }
+        case 'ungroup':
+          return ungroup(idOf(op, 'groupId', 'groupRef'));
+        case 'deleteNode':
+          return deleteNode(targetId(op));
+        case 'deletePage':
+          return deletePage(op.id);
+        case 'deleteDocument': {
+          const row = database.prepare('SELECT * FROM documents WHERE id = ?').get(op.id);
+          if (!row) throw new Error(`Document ${op.id} not found`);
+          database.prepare('DELETE FROM documents WHERE id = ?').run(op.id);
+          return { ok: true };
+        }
+        case 'deleteProject':
+          return deleteProject(op.id);
+
+        // ---- review ----
+        case 'createNote': {
+          const documentId = idOf(op, 'documentId', 'documentRef');
+          return createNote({
+            documentId,
+            nodeId: op.nodeId != null ? op.nodeId : null,
+            x: op.x, y: op.y, body: op.body,
+            author: op.author != null ? op.author : 'ai',
+          });
+        }
+        case 'resolveNote':
+          return resolveNote(op.id, { resolution: op.resolution });
+        case 'addVersion': {
+          const documentId = idOf(op, 'documentId', 'documentRef');
+          return saveVersion({ documentId, summary: op.summary, author: 'ai' });
+        }
+        case 'restoreVersion':
+          return restoreVersion(op.id);
+
+        default:
+          throw new Error(`applyOps: unknown op "${op.op}"`);
+      }
+    };
+
+    // Suppress per-op emitChanged (the internal helpers call it); emit once after.
+    const savedOnChanged = onChanged;
+    onChanged = () => {};
+    const tx = database.transaction(() => {
+      for (const op of ops) results.push(dispatch(op));
+    });
+    try {
+      tx();
+    } finally {
+      onChanged = savedOnChanged;
+    }
+    emitChanged();
+
+    return { refs: Object.fromEntries(refs), results };
+  }
+
   return {
     setOnChanged(fn) {
       onChanged = typeof fn === 'function' ? fn : () => {};
@@ -945,6 +1137,8 @@ function openDb(dbPath, opts = {}) {
     listVersions,
     getVersion,
     restoreVersion,
+    // batch
+    applyOps,
     // escape hatch for tests/tools
     _raw: database,
   };

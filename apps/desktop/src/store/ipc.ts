@@ -122,6 +122,7 @@ function buildMock(): CanvasApi {
       return { ...v, snapshot: JSON.stringify({ nodes }) };
     },
     async restoreVersion() { emit(); return { ok: true }; },
+    async applyOps() { emit(); return { refs: {}, results: [] }; },
     async listPages() { return [{ id: 1, documentId: 1, name: 'Page 1', idx: 0 }]; },
     async createPage(input) { return { id: 2, documentId: input.documentId, name: input.name ?? 'Page', idx: 1 }; },
     async renamePage() { return { ok: true }; },
