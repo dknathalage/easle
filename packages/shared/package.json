@@ -1,0 +1,10 @@
+{
+  "name": "@canvas/shared",
+  "version": "0.1.0",
+  "private": true,
+  "main": "types.js",
+  "exports": {
+    ".": "./types.js",
+    "./schema.sql": "./schema.sql"
+  }
+}

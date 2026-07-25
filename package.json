@@ -1,0 +1,16 @@
+{
+  "name": "canvas",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local Figma-style, AI-authored / human-reviewed design-iteration tool",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace apps/desktop",
+    "build": "npm run build --workspace apps/desktop",
+    "start": "npm run start --workspace apps/desktop",
+    "mcp": "node packages/mcp/server.js"
+  }
+}
