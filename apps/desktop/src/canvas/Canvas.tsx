@@ -7,6 +7,7 @@ import { NotePin } from './NotePin';
 
 const ZOOM_MIN = 0.05;
 const ZOOM_MAX = 8;
+const ZOOM_SENSITIVITY = 0.1;
 
 export function Canvas() {
   const nodes = useStore((s) => s.nodes);
@@ -71,7 +72,7 @@ export function Canvas() {
       const py = e.clientY - rect.top;
       const worldX = (px - camera.x) / camera.zoom;
       const worldY = (py - camera.y) / camera.zoom;
-      const factor = Math.exp(-e.deltaY * 0.0015);
+      const factor = Math.exp(-e.deltaY * ZOOM_SENSITIVITY);
       const zoom = clamp(camera.zoom * factor, ZOOM_MIN, ZOOM_MAX);
       setCamera({ zoom, x: px - worldX * zoom, y: py - worldY * zoom });
     } else {
