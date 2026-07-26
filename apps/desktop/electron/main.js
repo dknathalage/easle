@@ -99,6 +99,8 @@ function createWindow() {
     width: 1400,
     height: 900,
     title: 'Easle',
+    // Window/taskbar icon on Windows & Linux (macOS uses the bundled .icns).
+    icon: path.join(__dirname, '..', 'dist', 'icon.png'),
     backgroundColor: '#1e1e1e',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
