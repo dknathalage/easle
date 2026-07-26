@@ -2,6 +2,18 @@
 
 All notable changes to Easle are documented here. This file is generated from [Conventional Commits](https://www.conventionalcommits.org/) by `task release`.
 
+## [0.1.6](https://github.com/dknathalage/easle/compare/v0.1.5...v0.1.6) (2026-07-26)
+
+
+### Features
+
+* **desktop:** add Easle app icon and favicon ([dbea659](https://github.com/dknathalage/easle/commit/dbea65923467e66a3d026ca383036edecf47ebdf)), closes [#4F46E5](https://github.com/dknathalage/easle/issues/4F46E5)
+
+
+### Bug Fixes
+
+* **compile:** use sucrase instead of esbuild for runtime JSX compile ([4c31e6e](https://github.com/dknathalage/easle/commit/4c31e6e7a70d65be85527dfb3ca002f8ed75b2e5))
+
 ## [0.1.5](https://github.com/dknathalage/easle/compare/v0.1.4...v0.1.5) (2026-07-25)
 
 
